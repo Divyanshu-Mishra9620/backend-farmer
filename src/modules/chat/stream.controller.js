@@ -98,7 +98,7 @@ export async function streamSuggestion(req, res, _next) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "meta-llama/llama-3.1-70b-versatile",
+            model: "llama-3.3-70b-versatile",
             messages: [{ role: "user", content: enhancedPrompt }],
             stream: true,
             max_tokens: 600,
