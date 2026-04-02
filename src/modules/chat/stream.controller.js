@@ -73,8 +73,8 @@ export async function streamSuggestion(req, res, _next) {
     res.write(`data: ${JSON.stringify({ status: "connecting" })}\n\n`);
     if (res.flush) res.flush();
 
-    if (!config.openrouterApiKey) {
-      logger.error("OpenRouter API key is not configured");
+    if (!config.groqApiKey) {
+      logger.error("Groq API key not configured");
       res.write(
         `data: ${JSON.stringify({ error: true, message: "API key not configured" })}\n\n`,
       );
@@ -87,23 +87,37 @@ export async function streamSuggestion(req, res, _next) {
 
     let response;
     try {
-      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.openrouterApiKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": config.frontendUrl,
-          "X-Title": "Krishi Mitra",
+      // Use Groq API for streaming suggestions (same as disease detection)
+      logger.info("Attempting Groq API call for streaming suggestion...");
+      response = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.groqApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "mixtral-8x7b-32768",
+            messages: [{ role: "user", content: enhancedPrompt }],
+            stream: true,
+            max_tokens: 600,
+            temperature: 0.7,
+          }),
+          signal: controller.signal,
         },
-        body: JSON.stringify({
-          model: "google/gemini-2.0-flash-exp:free",
-          messages: [{ role: "user", content: enhancedPrompt }],
-          stream: true,
-          max_tokens: 600,
-          temperature: 0.7,
-        }),
-        signal: controller.signal,
-      });
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        logger.error("Groq API error", {
+          status: response.status,
+          body: errorBody.substring(0, 200),
+        });
+        throw new Error(`Groq API error: ${response.status}`);
+      }
+
+      logger.info("Groq API call successful, streaming response");
     } catch (fetchErr) {
       clearTimeout(timeoutId);
       logger.error("Fetch error", fetchErr.message);
@@ -124,11 +138,11 @@ export async function streamSuggestion(req, res, _next) {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      logger.error("OpenRouter API error", {
+      logger.error("API error", {
         status: response.status,
         body: errorBody.substring(0, 200),
       });
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      throw new Error(`API error: ${response.status}`);
     }
 
     let buffer = "";
@@ -142,6 +156,8 @@ export async function streamSuggestion(req, res, _next) {
 
         for (const line of lines) {
           if (line.trim() === "") continue;
+
+          // Handle Groq SSE format (same as OpenRouter)
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
@@ -190,7 +206,8 @@ export async function streamSuggestion(req, res, _next) {
     res.write(
       `data: ${JSON.stringify({
         error: true,
-        message: "An error occurred while generating suggestions. Please try again.",
+        message:
+          "An error occurred while generating suggestions. Please try again.",
       })}\n\n`,
     );
     res.end();
@@ -222,20 +239,28 @@ export async function getSuggestion(req, res, next) {
       });
     }
 
+    if (!config.groqApiKey) {
+      logger.error("Groq API key not configured");
+      return res.status(503).json({
+        success: false,
+        error: "API key not configured",
+      });
+    }
+
     const enhancedPrompt = buildFarmingPrompt(query, context);
 
+    // Use Groq API (same as disease detection)
+    logger.info("Calling Groq API for direct suggestion...");
     const response = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
+      "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${config.openrouterApiKey}`,
+          Authorization: `Bearer ${config.groqApiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": config.frontendUrl,
-          "X-Title": "Krishi Mitra",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.0-flash-exp:free",
+          model: "mixtral-8x7b-32768",
           messages: [{ role: "user", content: enhancedPrompt }],
           max_tokens: 600,
           temperature: 0.7,
@@ -244,7 +269,7 @@ export async function getSuggestion(req, res, next) {
     );
 
     if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status}`);
+      throw new Error(`Groq API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -253,6 +278,7 @@ export async function getSuggestion(req, res, next) {
     // Cache it
     aiCache.set(cacheKey, text);
 
+    logger.info("Direct suggestion generated successfully");
     res.json({
       success: true,
       suggestion: text,
