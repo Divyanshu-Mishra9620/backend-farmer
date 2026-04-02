@@ -7,13 +7,32 @@ import { aiCache, LRUCache } from "../../shared/utils/cache.js";
 
 const logger = createLogger("LangGraph");
 
-const groq = new ChatGroq({
-  apiKey: config.groqApiKey,
-  model: "llama-3.1-70b-versatile",
-});
+let groq = null;
+let genAI = null;
+let geminiModel = null;
 
-const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const initializeLLMs = () => {
+  if (!groq && config.groqApiKey) {
+    groq = new ChatGroq({
+      apiKey: config.groqApiKey,
+      model: "llama-3.1-70b-versatile",
+    });
+  }
+
+  if (!genAI && config.geminiApiKey) {
+    genAI = new GoogleGenerativeAI(config.geminiApiKey);
+    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  }
+
+  if (!groq || !genAI) {
+    logger.warn(
+      "⚠️  LLM APIs not fully initialized. Missing API keys. App will attempt fallback mode.",
+    );
+  }
+};
+
+// Initialize on first use
+initializeLLMs();
 
 const AgentState = {
   messages: {
@@ -112,6 +131,15 @@ Respond in JSON format:
   `;
 
   try {
+    if (!groq) {
+      logger.warn("Groq LLM not initialized, using fallback analysis");
+      return {
+        ...state,
+        analysis: getFallbackAnalysis(),
+        currentStep: "generate_recommendations",
+      };
+    }
+
     const result = await groq.invoke([
       { role: "user", content: analysisPrompt },
     ]);
@@ -137,8 +165,8 @@ Respond in JSON format:
       analysis,
       currentStep: "generate_recommendations",
     };
-  } catch (error) {
-    logger.warn("Context analysis failed, using fallback", error.message);
+  } catch (error_) {
+    logger.warn("Context analysis failed, using fallback", error_.message);
     return {
       ...state,
       analysis: getFallbackAnalysis(),
@@ -160,14 +188,12 @@ async function generateRecommendations(state) {
     if (ctx.location) {
       if (ctx.location.address)
         contextStr += `- Location: ${ctx.location.address}\n`;
-      if (ctx.location.state)
-        contextStr += `- State: ${ctx.location.state}\n`;
+      if (ctx.location.state) contextStr += `- State: ${ctx.location.state}\n`;
     }
     if (ctx.weather) {
       contextStr += `- Weather: ${ctx.weather.temp ? `${Math.round(ctx.weather.temp)}°C` : "N/A"}, ${ctx.weather.humidity || "N/A"}% humidity`;
       if (ctx.weather.rain) contextStr += `, ${ctx.weather.rain}mm rain`;
-      if (ctx.weather.description)
-        contextStr += `, ${ctx.weather.description}`;
+      if (ctx.weather.description) contextStr += `, ${ctx.weather.description}`;
       contextStr += "\n";
     }
     if (ctx.soilAnalysis)
@@ -197,6 +223,21 @@ Respond in a conversational, helpful manner. Keep your response comprehensive bu
   `;
 
   try {
+    if (!geminiModel) {
+      logger.warn(
+        "Gemini Model not initialized, using fallback recommendations",
+      );
+      const fallbackResponse = generateFallbackResponse(
+        lastMessage,
+        safeContext,
+      );
+      return {
+        ...state,
+        recommendations: [fallbackResponse],
+        currentStep: "format_response",
+      };
+    }
+
     const result = await geminiModel.generateContent(farmingPrompt);
     const recommendation = result.response.text();
 
@@ -205,8 +246,8 @@ Respond in a conversational, helpful manner. Keep your response comprehensive bu
       recommendations: [recommendation],
       currentStep: "format_response",
     };
-  } catch (error) {
-    logger.error("Gemini recommendation generation failed", error.message);
+  } catch (error_) {
+    logger.error("Gemini recommendation generation failed", error_.message);
     const fallbackResponse = generateFallbackResponse(lastMessage, safeContext);
     return {
       ...state,
@@ -277,11 +318,24 @@ function generateFallbackResponse(query, safeContext) {
   };
 
   const queryLower = query?.toLowerCase() || "";
-  if (queryLower.includes("crop") || queryLower.includes("plant") || queryLower.includes("grow")) return responses.crop;
-  if (queryLower.includes("pest") || queryLower.includes("insect") || queryLower.includes("disease")) return responses.pest;
-  if (queryLower.includes("soil") || queryLower.includes("fertilizer")) return responses.soil;
-  if (queryLower.includes("weather") || queryLower.includes("rain")) return responses.weather;
-  if (queryLower.includes("market") || queryLower.includes("price")) return responses.market;
+  if (
+    queryLower.includes("crop") ||
+    queryLower.includes("plant") ||
+    queryLower.includes("grow")
+  )
+    return responses.crop;
+  if (
+    queryLower.includes("pest") ||
+    queryLower.includes("insect") ||
+    queryLower.includes("disease")
+  )
+    return responses.pest;
+  if (queryLower.includes("soil") || queryLower.includes("fertilizer"))
+    return responses.soil;
+  if (queryLower.includes("weather") || queryLower.includes("rain"))
+    return responses.weather;
+  if (queryLower.includes("market") || queryLower.includes("price"))
+    return responses.market;
   return responses.default;
 }
 
@@ -335,9 +389,10 @@ export async function executeFarmerAssistantPipeline(messages, context = {}) {
   const startTime = Date.now();
 
   // Check cache first
-  const lastMsg = Array.isArray(messages) && messages.length > 0
-    ? messages[messages.length - 1]?.content || ""
-    : "";
+  const lastMsg =
+    Array.isArray(messages) && messages.length > 0
+      ? messages[messages.length - 1]?.content || ""
+      : "";
   const cacheKey = LRUCache.generateKey("langgraph", lastMsg, context);
   const cached = aiCache.get(cacheKey);
   if (cached) {
