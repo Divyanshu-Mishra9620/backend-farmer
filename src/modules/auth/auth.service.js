@@ -1,7 +1,4 @@
-import {
-  comparePassword,
-  hashPassword,
-} from "../../shared/utils/hash.js";
+import { comparePassword, hashPassword } from "../../shared/utils/hash.js";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -12,26 +9,47 @@ import { sendEmail } from "../../shared/utils/email.js";
 import crypto from "crypto";
 
 export const signup = async (userData) => {
-  const { name, email, password, state, district, address, dob, phone } =
-    userData;
+  try {
+    const { name, email, password, state, district, address, dob } = userData;
 
-  const existingUser = await User.findOne({
-    email: email,
-  });
-  if (existingUser) {
-    throw new Error("User already exists with this email");
-  }
-  if (!name || !email || !password || !state || !district || !address || !dob) {
-    throw new Error("All fields are required");
-  }
-  const hashedPwd = await hashPassword(password);
-  const user = new User({
-    ...userData,
-    password: hashedPwd,
-  });
+    const existingUser = await User.findOne({
+      email: email,
+    });
+    if (existingUser) {
+      throw new Error("User already exists with this email");
+    }
+    if (
+      !name ||
+      !email ||
+      !password ||
+      !state ||
+      !district ||
+      !address ||
+      !dob
+    ) {
+      throw new Error("All fields are required");
+    }
+    const hashedPwd = await hashPassword(password);
+    const user = new User({
+      ...userData,
+      password: hashedPwd,
+    });
 
-  await user.save();
-  return user;
+    await user.save();
+    return user;
+  } catch (error) {
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      throw new Error("User with this email already exists");
+    }
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      throw new Error(`Validation failed: ${messages.join(", ")}`);
+    }
+    // Re-throw the error
+    throw error;
+  }
 };
 
 export const login = async (email, password) => {
@@ -95,7 +113,7 @@ export const forgotPassword = async (email) => {
     user.email,
     "Password Reset Request",
     `Reset your password using this link: ${resetUrl}`,
-    `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 15 minutes.</p>`
+    `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 15 minutes.</p>`,
   );
 
   return { message: "Password reset email sent" };
