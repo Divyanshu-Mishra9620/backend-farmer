@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -12,7 +12,7 @@ export const generalLimiter = rateLimit({
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return req.user?.id || req.ip;
+    return req.user?.id || ipKeyGenerator(req);
   },
 });
 
@@ -28,7 +28,7 @@ export const aiLimiter = rateLimit({
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return `ai:${req.user?.id || req.ip}`;
+    return `ai:${req.user?.id || ipKeyGenerator(req)}`;
   },
 });
 
@@ -39,11 +39,12 @@ export const streamLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    message: "Streaming request limit reached. Please wait before trying again.",
+    message:
+      "Streaming request limit reached. Please wait before trying again.",
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return `stream:${req.user?.id || req.ip}`;
+    return `stream:${req.user?.id || ipKeyGenerator(req)}`;
   },
 });
 
