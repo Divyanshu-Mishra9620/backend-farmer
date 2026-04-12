@@ -28,7 +28,7 @@ export const createPost = async (req, res) => {
     await newPost.save();
     const populatedPost = await Post.findById(newPost._id).populate(
       "author",
-      "name email"
+      "name email",
     );
     res.status(201).json(populatedPost);
   } catch (error) {
@@ -50,10 +50,21 @@ export const getAllPosts = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    // Add comment count to each post
+    const postsWithComments = await Promise.all(
+      posts.map(async (post) => {
+        const commentCount = await Comment.countDocuments({ post: post._id });
+        return {
+          ...(post.toObject ? post.toObject() : post),
+          commentCount,
+        };
+      }),
+    );
+
     const totalPosts = await Post.countDocuments();
 
     res.status(200).json({
-      posts,
+      posts: postsWithComments,
       totalPages: Math.ceil(totalPosts / limit),
       currentPage: page,
     });
@@ -153,7 +164,7 @@ export const updatePost = async (req, res) => {
     const updatedPost = await Post.findByIdAndUpdate(
       postId,
       { title, content, imageUrl },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     ).populate("author", "name email");
 
     res.status(200).json(updatedPost);
@@ -176,7 +187,14 @@ export const getPostById = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(200).json(post);
+    // Add comment count
+    const commentCount = await Comment.countDocuments({ post: post._id });
+    const postWithComments = {
+      ...(post.toObject ? post.toObject() : post),
+      commentCount,
+    };
+
+    res.status(200).json(postWithComments);
   } catch (error) {
     res
       .status(500)

@@ -5,6 +5,7 @@ import {
   getWeather,
   getMarketTrends,
   analyzeSoil,
+  uploadCommunityMessageImage,
 } from "./chat.controller.js";
 import { streamSuggestion, getSuggestion } from "./stream.controller.js";
 
@@ -38,6 +39,20 @@ router.post("/suggest", authMiddleware, aiLimiter, chatSuggest);
 router.post("/geo/geocode", authMiddleware, geocodeAddress);
 router.get("/weather/current", authMiddleware, getWeather);
 router.get("/market/trends", authMiddleware, getMarketTrends);
-router.post("/soil/analyze", authMiddleware, aiLimiter, uploadSingle, analyzeSoil);
+router.post(
+  "/soil/analyze",
+  authMiddleware,
+  aiLimiter,
+  uploadSingle,
+  analyzeSoil,
+);
+
+// Community chat image upload
+router.post(
+  "/community/upload-image",
+  authMiddleware,
+  uploadSingle,
+  uploadCommunityMessageImage,
+);
 
 export default router;
