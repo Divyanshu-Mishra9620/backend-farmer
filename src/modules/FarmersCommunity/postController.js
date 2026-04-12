@@ -30,7 +30,7 @@ export const createPost = async (req, res) => {
       "author",
       "name email"
     );
-    res.status(201).json(populatedPost);
+    res.status(201).json({ ...populatedPost.toObject(), commentCount: 0 });
   } catch (error) {
     res
       .status(500)
@@ -50,10 +50,24 @@ export const getAllPosts = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    const postIds = posts.map((post) => post._id);
+    const commentCounts = await Comment.aggregate([
+      { $match: { post: { $in: postIds } } },
+      { $group: { _id: "$post", count: { $sum: 1 } } },
+    ]);
+    const countMap = new Map(
+      commentCounts.map((entry) => [entry._id.toString(), entry.count])
+    );
+
+    const postsWithCommentCount = posts.map((post) => ({
+      ...post.toObject(),
+      commentCount: countMap.get(post._id.toString()) || 0,
+    }));
+
     const totalPosts = await Post.countDocuments();
 
     res.status(200).json({
-      posts,
+      posts: postsWithCommentCount,
       totalPages: Math.ceil(totalPosts / limit),
       currentPage: page,
     });
@@ -95,7 +109,8 @@ export const votePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(200).json(updatedPost);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
@@ -156,7 +171,8 @@ export const updatePost = async (req, res) => {
       { new: true, runValidators: true }
     ).populate("author", "name email");
 
-    res.status(200).json(updatedPost);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
@@ -176,7 +192,8 @@ export const getPostById = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(200).json(post);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...post.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
