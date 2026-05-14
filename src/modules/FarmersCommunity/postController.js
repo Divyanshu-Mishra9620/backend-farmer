@@ -30,7 +30,7 @@ export const createPost = async (req, res) => {
       "author",
       "name email"
     );
-    res.status(201).json(populatedPost);
+    res.status(201).json({ ...populatedPost.toObject(), commentCount: 0 });
   } catch (error) {
     res
       .status(500)
@@ -95,7 +95,8 @@ export const votePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(200).json(updatedPost);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
@@ -156,7 +157,8 @@ export const updatePost = async (req, res) => {
       { new: true, runValidators: true }
     ).populate("author", "name email");
 
-    res.status(200).json(updatedPost);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
