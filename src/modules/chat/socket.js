@@ -203,7 +203,7 @@ export function initSocket(server) {
           });
 
           console.log(
-            `User ${socket.userId} joined conversation ${conversationId}`,
+            `User ${socket.userId} joined conversation ${conversationId}`
           );
         } else {
           socket.emit("error", {
@@ -281,7 +281,7 @@ export function initSocket(server) {
           });
 
           console.log(
-            `Chat response sent to user ${socket.userId} (${responseTime}ms)`,
+            `Chat response sent to user ${socket.userId} (${responseTime}ms)`
           );
         } catch (error) {
           console.error("Chat message error:", error);
@@ -300,7 +300,7 @@ export function initSocket(server) {
             error: error.message,
           });
         }
-      },
+      }
     );
 
     socket.on("join_community_channel", async ({ channelId }) => {
@@ -313,7 +313,7 @@ export function initSocket(server) {
 
         const isMember = await chatService.isChannelMember(
           channelId,
-          socket.userId,
+          socket.userId
         );
 
         if (isMember) {
@@ -368,16 +368,10 @@ export function initSocket(server) {
 
     socket.on(
       "send_community_message",
-      async ({
-        channelId,
-        content,
-        messageType = "text",
-        mentions = [],
-        attachments = [],
-      }) => {
+      async ({ channelId, content, messageType = "text", mentions = [] }) => {
         try {
           console.log(
-            `Received community message from user ${socket.userId} for channel ${channelId}`,
+            `Received community message from user ${socket.userId} for channel ${channelId}`
           );
 
           if (typeof chatService.isChannelMember !== "function") {
@@ -392,7 +386,7 @@ export function initSocket(server) {
 
           const isMember = await chatService.isChannelMember(
             channelId,
-            socket.userId,
+            socket.userId
           );
           if (!isMember) {
             socket.emit("error", {
@@ -414,7 +408,6 @@ export function initSocket(server) {
             content: content.trim(),
             messageType,
             mentions,
-            attachments,
           };
 
           const message = await chatService.sendCommunityMessage(messageData);
@@ -440,7 +433,7 @@ export function initSocket(server) {
           }
 
           console.log(
-            `Community message sent in channel ${channelId} by user ${socket.userId}`,
+            `Community message sent in channel ${channelId} by user ${socket.userId}`
           );
         } catch (error) {
           console.error("Community message error:", error);
@@ -448,7 +441,7 @@ export function initSocket(server) {
             message: "Failed to send message: " + error.message,
           });
         }
-      },
+      }
     );
 
     socket.on("toggle_message_reaction", async ({ messageId, emoji }) => {
@@ -461,7 +454,7 @@ export function initSocket(server) {
         const result = await chatService.toggleMessageReaction(
           messageId,
           socket.userId,
-          emoji,
+          emoji
         );
 
         if (result.channelId) {
@@ -473,7 +466,7 @@ export function initSocket(server) {
               emoji,
               action: result.action,
               reactionCounts: result.reactionCounts,
-            },
+            }
           );
         }
       } catch (error) {
@@ -504,7 +497,7 @@ export function initSocket(server) {
 
         const result = await chatService.deleteCommunityMessage(
           messageId,
-          socket.userId,
+          socket.userId
         );
 
         io.to(`channel:${result.channelId}`).emit("message_deleted", {
@@ -528,7 +521,7 @@ export function initSocket(server) {
         const message = await chatService.editCommunityMessage(
           messageId,
           socket.userId,
-          newContent,
+          newContent
         );
 
         if (message) {
@@ -631,12 +624,12 @@ export function initSocket(server) {
             message: "Failed to submit feedback",
           });
         }
-      },
+      }
     );
 
     socket.on("disconnect", (reason) => {
       console.log(
-        `Socket disconnected: ${socket.id} (User: ${socket.userId}, Reason: ${reason})`,
+        `Socket disconnected: ${socket.id} (User: ${socket.userId}, Reason: ${reason})`
       );
 
       trackEvent(socket.userId, "chat_message", {
