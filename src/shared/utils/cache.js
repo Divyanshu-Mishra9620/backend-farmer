@@ -3,7 +3,7 @@ import crypto from "crypto";
 class LRUCache {
   constructor({ maxSize = 500, defaultTTL = 30 * 60 * 1000 } = {}) {
     this.maxSize = maxSize;
-    this.defaultTTL = defaultTTL; // 30 minutes default
+    this.defaultTTL = defaultTTL;
     this.cache = new Map();
     this.hits = 0;
     this.misses = 0;
@@ -128,11 +128,11 @@ class LRUCache {
 
 // Pre-configured cache instances for different purposes
 const TTL = {
-  AI_RESPONSE: 30 * 60 * 1000, // 30 minutes
-  WEATHER: 10 * 60 * 1000, // 10 minutes
-  MARKET: 60 * 60 * 1000, // 1 hour
-  USER_PREFS: 5 * 60 * 1000, // 5 minutes
-  GEOCODE: 24 * 60 * 60 * 1000, // 24 hours
+  AI_RESPONSE: 30 * 60 * 1000,
+  WEATHER: 10 * 60 * 1000,
+  MARKET: 60 * 60 * 1000,
+  USER_PREFS: 5 * 60 * 1000,
+  GEOCODE: 24 * 60 * 60 * 1000,
 };
 
 // Singleton caches
@@ -141,11 +141,14 @@ const weatherCache = new LRUCache({ maxSize: 50, defaultTTL: TTL.WEATHER });
 const geoCache = new LRUCache({ maxSize: 100, defaultTTL: TTL.GEOCODE });
 
 // Periodic cleanup every 10 minutes
-setInterval(() => {
-  aiCache.purgeExpired();
-  weatherCache.purgeExpired();
-  geoCache.purgeExpired();
-}, 10 * 60 * 1000);
+setInterval(
+  () => {
+    aiCache.purgeExpired();
+    weatherCache.purgeExpired();
+    geoCache.purgeExpired();
+  },
+  10 * 60 * 1000,
+);
 
 export { LRUCache, TTL, aiCache, weatherCache, geoCache };
 export default LRUCache;
