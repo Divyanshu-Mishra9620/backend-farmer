@@ -17,7 +17,6 @@ import {
 
 const router = Router();
 
-// AI streaming endpoints — stricter rate limits
 router.post(
   "/suggestions/suggest-stream",
   authMiddleware,

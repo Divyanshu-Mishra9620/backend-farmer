@@ -14,8 +14,10 @@ const config = {
 
   allowedOrigins: (
     process.env.ALLOWED_ORIGINS ||
-    "http://localhost:3000,http://localhost:5173,http://localhost:5174"
-  ).split(",").map((s) => s.trim()),
+    "https://kris-hinova.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:5174"
+  )
+    .split(",")
+    .map((s) => s.trim()),
 
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,

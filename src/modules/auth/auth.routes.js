@@ -7,7 +7,7 @@ import {
 
 const router = Router();
 
-// Validation helper
+// Validation
 const validateSignup = (req, res, next) => {
   const { name, email, password, state, district, address, dob } = req.body;
 
