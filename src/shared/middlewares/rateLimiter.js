@@ -12,7 +12,7 @@ export const generalLimiter = rateLimit({
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return req.user?.id || ipKeyGenerator(req);
+    return req.user?.id || ipKeyGenerator(req.ip);
   },
 });
 
@@ -28,7 +28,7 @@ export const aiLimiter = rateLimit({
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return `ai:${req.user?.id || ipKeyGenerator(req)}`;
+    return `ai:${req.user?.id || ipKeyGenerator(req.ip)}`;
   },
 });
 
@@ -39,12 +39,11 @@ export const streamLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     success: false,
-    message:
-      "Streaming request limit reached. Please wait before trying again.",
+    message: "Streaming request limit reached. Please wait before trying again.",
     retryAfter: "15 minutes",
   },
   keyGenerator: (req) => {
-    return `stream:${req.user?.id || ipKeyGenerator(req)}`;
+    return `stream:${req.user?.id || ipKeyGenerator(req.ip)}`;
   },
 });
 

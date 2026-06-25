@@ -151,11 +151,15 @@ export const updatePost = async (req, res) => {
         .json({ message: "You are not authorized to edit this post" });
     }
 
-    const updatedPost = await Post.findByIdAndUpdate(
-      postId,
-      { title, content, imageUrl },
-      { new: true, runValidators: true }
-    ).populate("author", "name email");
+    const updates = {};
+    if (title !== undefined) updates.title = title;
+    if (content !== undefined) updates.content = content;
+    if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+    const updatedPost = await Post.findByIdAndUpdate(postId, updates, {
+      new: true,
+      runValidators: true,
+    }).populate("author", "name email");
 
     const commentCount = await Comment.countDocuments({ post: postId });
     res.status(200).json({ ...updatedPost.toObject(), commentCount });

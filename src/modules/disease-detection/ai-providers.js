@@ -195,8 +195,7 @@ export class GeminiProvider {
         const prompt = this.buildAnalysisPrompt(cropType, location);
 
         const response = await fetch(
-          `
-          ${this.baseUrl}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+          `${this.baseUrl}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -243,7 +242,7 @@ export class GeminiProvider {
         if (attempt === maxRetries) break;
 
         console.log(
-          `Gemini attempt ${attempt} failed, retrying:, error.message`
+          `Gemini attempt ${attempt} failed, retrying: ${error.message}`
         );
         await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
       }
@@ -615,7 +614,7 @@ export async function analyzeWithFallback(
         return { ...result, provider: providerName };
       }
     } catch (error) {
-      console.log(`Provider ${providerName} failed:, error.message`);
+      console.log(`Provider ${providerName} failed: ${error.message}`);
       lastError = error;
       continue;
     }

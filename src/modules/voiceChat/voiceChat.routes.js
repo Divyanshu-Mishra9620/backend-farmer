@@ -7,6 +7,7 @@ import {
   getVoiceChatHistory,
 } from "./voiceChat.controller.js";
 import { authMiddleware } from "../../shared/middlewares/authMiddleware.js";
+import { aiLimiter } from "../../shared/middlewares/rateLimiter.js";
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.post("/start-session", authMiddleware, startVoiceSession);
 router.post(
   "/process-audio",
   authMiddleware,
+  aiLimiter,
   (req, res, next) => {
     upload.single("audio")(req, res, (err) => {
       if (err) {

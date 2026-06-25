@@ -25,6 +25,12 @@ const conversationSchema = new mongoose.Schema({
 
 const voiceChatSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     sessionId: {
       type: String,
       required: true,

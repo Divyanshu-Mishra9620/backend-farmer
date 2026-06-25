@@ -38,16 +38,6 @@ export const refresh = async (req, res, next) => {
   }
 };
 
-export const resetPassword = async (req, res, next) => {
-  try {
-    const { newPassword } = req.body;
-    await authService.resetPassword(req.user.id, newPassword);
-    res.json({ message: "Password reset successful" });
-  } catch (err) {
-    next(err);
-  }
-};
-
 export const profile = async (req, res, next) => {
   try {
     const user = await authService.getProfile(req.user.id);

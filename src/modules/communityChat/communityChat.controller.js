@@ -465,3 +465,146 @@ export const deleteMessage = async (req, res) => {
     });
   }
 };
+
+export const togglePin = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    const message = await communityService.toggleMessagePin(messageId, userId);
+
+    req.app.get("io").to(`channel:${message.channelId}`).emit("message_pin_toggled", {
+      messageId,
+      isPinned: message.isPinned,
+    });
+
+    res.json({
+      success: true,
+      data: message,
+      message: message.isPinned ? "Message pinned" : "Message unpinned",
+    });
+  } catch (error) {
+    console.error("Toggle pin error:", error);
+
+    if (error.message === "Message not found") {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+    if (error.message === "Unauthorized") {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to pin messages in this channel",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to toggle pin",
+      error: error.message,
+    });
+  }
+};
+
+export const getPinnedMessages = async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const pinnedMessages = await communityService.getPinnedMessages(
+      channelId,
+      req.user.id
+    );
+
+    res.json({
+      success: true,
+      data: pinnedMessages,
+      message: "Pinned messages retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Get pinned messages error:", error);
+
+    if (error.message === "Access denied") {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member to view pinned messages",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve pinned messages",
+      error: error.message,
+    });
+  }
+};
+
+export const searchMessages = async (req, res) => {
+  try {
+    const { query, channelId, page = 1, limit = 20 } = req.query;
+
+    if (!query || !query.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required",
+      });
+    }
+
+    const results = await communityService.searchMessages(query, req.user.id, {
+      channelId,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
+
+    res.json({
+      success: true,
+      data: results,
+      message: "Search completed successfully",
+    });
+  } catch (error) {
+    console.error("Search messages error:", error);
+
+    if (error.message === "Access denied") {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of that channel to search its messages",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to search messages",
+      error: error.message,
+    });
+  }
+};
+
+export const getChannelAnalytics = async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const { days = 7 } = req.query;
+
+    const analytics = await communityService.getChannelAnalytics(
+      channelId,
+      req.user.id,
+      parseInt(days)
+    );
+
+    res.json({
+      success: true,
+      data: analytics,
+      message: "Channel analytics retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Get channel analytics error:", error);
+
+    if (error.message === "Unauthorized") {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to view this channel's analytics",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve channel analytics",
+      error: error.message,
+    });
+  }
+};
