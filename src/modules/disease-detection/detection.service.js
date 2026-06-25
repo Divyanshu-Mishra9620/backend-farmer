@@ -56,6 +56,17 @@ export const analyzeImage = async ({
 
         analysis.imageUrl = imageUrl;
         await analysis.save();
+
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch (cleanupError) {
+            console.error(
+              "Failed to clean up local file after Cloudinary upload:",
+              cleanupError
+            );
+          }
+        }
       } catch (uploadError) {
         console.error(
           "Cloudinary upload failed, using local URL:",

@@ -15,7 +15,7 @@ const initializeLLMs = () => {
   if (!groq && config.groqApiKey) {
     groq = new ChatGroq({
       apiKey: config.groqApiKey,
-      model: "llama-3.1-70b-versatile",
+      model: "llama-3.3-70b-versatile",
     });
   }
 
