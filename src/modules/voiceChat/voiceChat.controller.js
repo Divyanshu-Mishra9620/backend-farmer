@@ -7,7 +7,7 @@ import {
 
 export const startVoiceSession = async (req, res) => {
   try {
-    const { userId } = req?.user;
+    const userId = req?.user?.id;
     const language = req?.body?.language || "hindi";
 
     const session = await createVoiceSession(userId, language);
@@ -29,7 +29,7 @@ export const startVoiceSession = async (req, res) => {
 
 export const processVoiceQuery = async (req, res) => {
   try {
-    const { userId } = req?.user;
+    const userId = req?.user?.id;
 
     console.log("[Voice] Request body:", req?.body);
     console.log("[Voice] Request file:", req?.file ? "Present" : "Not present");
@@ -109,9 +109,7 @@ export const processVoiceQuery = async (req, res) => {
 
 export const endVoiceSession = async (req, res) => {
   try {
-    const { userId } = req?.user;
-    console.log(userId);
-    console.log(req?.body, "body");
+    const userId = req?.user?.id;
 
     const sessionId = req?.body?.sessionId;
 
@@ -140,7 +138,7 @@ export const endVoiceSession = async (req, res) => {
 
 export const getVoiceChatHistory = async (req, res) => {
   try {
-    const { userId } = req?.user;
+    const userId = req?.user?.id;
     const { page = 1, limit = 10 } = req?.query;
 
     const history = await getUserVoiceHistory(

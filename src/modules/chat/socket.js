@@ -1,8 +1,13 @@
 import { Server } from "socket.io";
 import * as chatService from "./chat.service.js";
+import * as communityChatService from "../communityChat/communityChat.service.js";
 import { Conversation, Analytics } from "./chat.models.js";
 import jwt from "jsonwebtoken";
 import config from "../../config/env.js";
+import {
+  checkAiSocketLimit,
+  checkGeneralSocketLimit,
+} from "../../shared/utils/socketRateLimiter.js";
 
 let io;
 
@@ -221,6 +226,15 @@ export function initSocket(server) {
       async ({ messages, context, conversationId, sessionId }) => {
         const startTime = Date.now();
 
+        const limit = checkAiSocketLimit(socket.userId);
+        if (!limit.allowed) {
+          socket.emit("chat_error", {
+            message: "You're sending messages too quickly. Please slow down.",
+            retryAfterMs: limit.retryAfterMs,
+          });
+          return;
+        }
+
         try {
           console.log(`Received chat message from user ${socket.userId}`);
 
@@ -305,13 +319,7 @@ export function initSocket(server) {
 
     socket.on("join_community_channel", async ({ channelId }) => {
       try {
-        if (typeof chatService.isChannelMember !== "function") {
-          console.error("isChannelMember function not found in chatService");
-          socket.emit("error", { message: "Channel service not available" });
-          return;
-        }
-
-        const isMember = await chatService.isChannelMember(
+        const isMember = await communityChatService.isChannelMember(
           channelId,
           socket.userId
         );
@@ -369,22 +377,21 @@ export function initSocket(server) {
     socket.on(
       "send_community_message",
       async ({ channelId, content, messageType = "text", mentions = [] }) => {
+        const limit = checkGeneralSocketLimit(socket.userId);
+        if (!limit.allowed) {
+          socket.emit("error", {
+            message: "You're sending messages too quickly. Please slow down.",
+            retryAfterMs: limit.retryAfterMs,
+          });
+          return;
+        }
+
         try {
           console.log(
             `Received community message from user ${socket.userId} for channel ${channelId}`
           );
 
-          if (typeof chatService.isChannelMember !== "function") {
-            socket.emit("error", { message: "Channel service not available" });
-            return;
-          }
-
-          if (typeof chatService.sendCommunityMessage !== "function") {
-            socket.emit("error", { message: "Message service not available" });
-            return;
-          }
-
-          const isMember = await chatService.isChannelMember(
+          const isMember = await communityChatService.isChannelMember(
             channelId,
             socket.userId
           );
@@ -410,12 +417,8 @@ export function initSocket(server) {
             mentions,
           };
 
-          const message = await chatService.sendCommunityMessage(messageData);
-
-          const populatedMessage = await message.populate([
-            { path: "userId", select: "name email" },
-            { path: "mentions", select: "name email" },
-          ]);
+          const populatedMessage =
+            await communityChatService.sendMessage(messageData);
 
           io.to(`channel:${channelId}`).emit("new_community_message", {
             message: populatedMessage,
@@ -444,14 +447,58 @@ export function initSocket(server) {
       }
     );
 
-    socket.on("toggle_message_reaction", async ({ messageId, emoji }) => {
+    socket.on("reply_to_message", async ({ messageId, channelId, content }) => {
+      const limit = checkGeneralSocketLimit(socket.userId);
+      if (!limit.allowed) {
+        socket.emit("error", { message: "Too many requests. Please slow down." });
+        return;
+      }
+
       try {
-        if (typeof chatService.toggleMessageReaction !== "function") {
-          socket.emit("error", { message: "Reaction service not available" });
+        if (!content || !content.trim()) {
+          socket.emit("error", { message: "Reply cannot be empty" });
           return;
         }
 
-        const result = await chatService.toggleMessageReaction(
+        const isMember = await communityChatService.isChannelMember(
+          channelId,
+          socket.userId
+        );
+        if (!isMember) {
+          socket.emit("error", {
+            message: "Access denied - not a channel member",
+          });
+          return;
+        }
+
+        const message = await communityChatService.addReply(
+          messageId,
+          socket.userId,
+          content.trim()
+        );
+
+        io.to(`channel:${channelId}`).emit("message_replied", {
+          messageId,
+          channelId,
+          reply: message.replies[message.replies.length - 1],
+        });
+      } catch (error) {
+        console.error("Reply message error:", error);
+        socket.emit("error", {
+          message: "Failed to send reply: " + error.message,
+        });
+      }
+    });
+
+    socket.on("toggle_message_reaction", async ({ messageId, emoji }) => {
+      const limit = checkGeneralSocketLimit(socket.userId);
+      if (!limit.allowed) {
+        socket.emit("error", { message: "Too many requests. Please slow down." });
+        return;
+      }
+
+      try {
+        const result = await communityChatService.toggleMessageReaction(
           messageId,
           socket.userId,
           emoji
@@ -489,13 +536,14 @@ export function initSocket(server) {
     });
 
     socket.on("delete_community_message", async ({ messageId }) => {
-      try {
-        if (typeof chatService.deleteCommunityMessage !== "function") {
-          socket.emit("error", { message: "Delete service not available" });
-          return;
-        }
+      const limit = checkGeneralSocketLimit(socket.userId);
+      if (!limit.allowed) {
+        socket.emit("error", { message: "Too many requests. Please slow down." });
+        return;
+      }
 
-        const result = await chatService.deleteCommunityMessage(
+      try {
+        const result = await communityChatService.deleteMessage(
           messageId,
           socket.userId
         );
@@ -512,13 +560,14 @@ export function initSocket(server) {
     });
 
     socket.on("edit_community_message", async ({ messageId, newContent }) => {
-      try {
-        if (typeof chatService.editCommunityMessage !== "function") {
-          socket.emit("error", { message: "Edit service not available" });
-          return;
-        }
+      const limit = checkGeneralSocketLimit(socket.userId);
+      if (!limit.allowed) {
+        socket.emit("error", { message: "Too many requests. Please slow down." });
+        return;
+      }
 
-        const message = await chatService.editCommunityMessage(
+      try {
+        const message = await communityChatService.editCommunityMessage(
           messageId,
           socket.userId,
           newContent
@@ -568,6 +617,14 @@ export function initSocket(server) {
     });
 
     socket.on("analyze_soil", async ({ imageData, crop, conversationId }) => {
+      const limit = checkAiSocketLimit(socket.userId);
+      if (!limit.allowed) {
+        socket.emit("analysis_error", {
+          message: "Too many analysis requests. Please slow down.",
+        });
+        return;
+      }
+
       try {
         socket.emit("analysis_status", {
           status: "processing",

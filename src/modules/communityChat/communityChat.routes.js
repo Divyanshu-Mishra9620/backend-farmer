@@ -145,4 +145,30 @@ router.delete(
   communityController.deleteMessage
 );
 
+router.post(
+  "/messages/:messageId/pin",
+  param("messageId").isMongoId().withMessage("Invalid message ID"),
+  communityController.togglePin
+);
+
+router.get(
+  "/channels/:channelId/pinned-messages",
+  param("channelId").isMongoId().withMessage("Invalid channel ID"),
+  communityController.getPinnedMessages
+);
+
+router.get(
+  "/channels/:channelId/analytics",
+  param("channelId").isMongoId().withMessage("Invalid channel ID"),
+  query("days").optional().isInt({ min: 1, max: 90 }),
+  communityController.getChannelAnalytics
+);
+
+router.get(
+  "/search",
+  query("query").trim().notEmpty().withMessage("Search query is required"),
+  query("channelId").optional().isMongoId().withMessage("Invalid channel ID"),
+  communityController.searchMessages
+);
+
 export default router;

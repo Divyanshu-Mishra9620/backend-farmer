@@ -27,6 +27,7 @@ const config = {
   geminiApiKey: process.env.GEMINI_API_KEY,
   openrouterApiKey: process.env.OPENROUTER_API_KEY,
   langgraphApiKey: process.env.LANGGRAPH_API_KEY,
+  huggingFaceApiKey: process.env.HUGGINGFACE_API_KEY,
   DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY,
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE || "5242880", 10),
 };

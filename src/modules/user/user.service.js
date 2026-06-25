@@ -29,6 +29,19 @@ export const updateProfile = async (userId, data) => {
   );
 };
 
+export const updateEmail = async (userId, newEmail) => {
+  if (!newEmail) throw new Error("New email is required");
+
+  const existingUser = await User.findOne({ email: newEmail });
+  if (existingUser) throw new Error("Email is already in use");
+
+  return await User.findByIdAndUpdate(
+    userId,
+    { email: newEmail },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+};
+
 export const changePassword = async (userId, oldPassword, newPassword) => {
   const user = await User.findById(userId);
   if (!user) throw new Error("User not found");
