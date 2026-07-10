@@ -65,9 +65,11 @@ export const getChannels = async (options) => {
       {
         $lookup: {
           from: "users",
-          localField: "createdBy",
-          foreignField: "_id",
-          select: "name email",
+          let: { creatorId: "$createdBy" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$_id", "$$creatorId"] } } },
+            { $project: { name: 1, email: 1 } },
+          ],
           as: "creator",
         },
       },
@@ -132,9 +134,11 @@ export const getChannelById = async (channelId, userId) => {
     {
       $lookup: {
         from: "users",
-        localField: "createdBy",
-        foreignField: "_id",
-        select: "name email",
+        let: { creatorId: "$createdBy" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$creatorId"] } } },
+          { $project: { name: 1, email: 1 } },
+        ],
         as: "creator",
       },
     },

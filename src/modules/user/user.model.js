@@ -86,6 +86,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.virtual("age").get(function () {
+  if (!this.dob) return null;
   const ageDifMs = Date.now() - this.dob.getTime();
   const ageDate = new Date(ageDifMs);
   return Math.abs(ageDate.getUTCFullYear() - 1970);
