@@ -6,6 +6,8 @@ import {
 } from "./communityChat.models.js";
 import mongoose from "mongoose";
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export const getChannels = async (options) => {
   const {
     page = 1,
@@ -27,9 +29,10 @@ export const getChannels = async (options) => {
   }
 
   if (search) {
+    const safeSearch = escapeRegex(search.slice(0, 100));
     filter.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
+      { name: { $regex: safeSearch, $options: "i" } },
+      { description: { $regex: safeSearch, $options: "i" } },
     ];
   }
 
@@ -468,11 +471,12 @@ export const getChannelMembers = async (options) => {
   ];
 
   if (search) {
+    const safeSearch = escapeRegex(search.slice(0, 100));
     pipeline.push({
       $match: {
         $or: [
-          { "user.name": { $regex: search, $options: "i" } },
-          { "user.email": { $regex: search, $options: "i" } },
+          { "user.name": { $regex: safeSearch, $options: "i" } },
+          { "user.email": { $regex: safeSearch, $options: "i" } },
         ],
       },
     });
