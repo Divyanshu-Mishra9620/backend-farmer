@@ -24,6 +24,11 @@ const logger = createLogger("Express");
 export default async function expressLoader() {
   const app = express();
 
+  // Trust the platform's reverse proxy (Render/Railway) so req.protocol
+  // reflects the original https:// scheme instead of falling back to http,
+  // which otherwise produces broken/mixed-content image URLs.
+  app.set("trust proxy", 1);
+
   // Security headers
   app.use(
     helmet({

@@ -52,8 +52,22 @@ export const getAllPosts = async (req, res) => {
 
     const totalPosts = await Post.countDocuments();
 
+    const commentCounts = await Comment.aggregate([
+      { $match: { post: { $in: posts.map((p) => p._id) } } },
+      { $group: { _id: "$post", count: { $sum: 1 } } },
+    ]);
+    const commentCountByPost = commentCounts.reduce((acc, { _id, count }) => {
+      acc[_id.toString()] = count;
+      return acc;
+    }, {});
+
+    const postsWithCommentCount = posts.map((post) => ({
+      ...post.toObject(),
+      commentCount: commentCountByPost[post._id.toString()] || 0,
+    }));
+
     res.status(200).json({
-      posts,
+      posts: postsWithCommentCount,
       totalPages: Math.ceil(totalPosts / limit),
       currentPage: page,
     });
@@ -182,7 +196,8 @@ export const getPostById = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.status(200).json(post);
+    const commentCount = await Comment.countDocuments({ post: postId });
+    res.status(200).json({ ...post.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
