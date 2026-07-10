@@ -8,6 +8,7 @@ import {
   checkAiSocketLimit,
   checkGeneralSocketLimit,
 } from "../../shared/utils/socketRateLimiter.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 let io;
 
@@ -171,7 +172,16 @@ function validateAndSanitizeContext(context) {
 export function initSocket(server) {
   io = new Server(server, {
     cors: {
-      origin: config.frontendUrl || "*",
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          config.allowedOrigins.includes("*") ||
+          config.allowedOrigins.includes(origin)
+        ) {
+          return callback(null, true);
+        }
+        return callback(new Error("Not allowed by CORS"));
+      },
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -305,7 +315,7 @@ export function initSocket(server) {
           socket.emit("chat_error", {
             message:
               "I'm sorry, I'm having trouble responding right now. Please try again.",
-            error: error.message,
+            error: safeErrorMessage(error),
           });
 
           trackEvent(socket.userId, "chat_message", {
@@ -441,7 +451,7 @@ export function initSocket(server) {
         } catch (error) {
           console.error("Community message error:", error);
           socket.emit("error", {
-            message: "Failed to send message: " + error.message,
+            message: "Failed to send message: " + safeErrorMessage(error),
           });
         }
       }
@@ -485,7 +495,7 @@ export function initSocket(server) {
       } catch (error) {
         console.error("Reply message error:", error);
         socket.emit("error", {
-          message: "Failed to send reply: " + error.message,
+          message: "Failed to send reply: " + safeErrorMessage(error),
         });
       }
     });

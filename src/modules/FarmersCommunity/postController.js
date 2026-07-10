@@ -1,6 +1,7 @@
 import { Post } from "./PostModel.js";
 import { Comment } from "./CommentModel.js";
 import mongoose from "mongoose";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const createPost = async (req, res) => {
   try {
@@ -34,7 +35,7 @@ export const createPost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error creating post", error: error.message });
+      .json({ message: "Error creating post", error: safeErrorMessage(error) });
   }
 };
 
@@ -74,7 +75,7 @@ export const getAllPosts = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error fetching posts", error: error.message });
+      .json({ message: "Error fetching posts", error: safeErrorMessage(error) });
   }
 };
 
@@ -114,7 +115,7 @@ export const votePost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error voting on post", error: error.message });
+      .json({ message: "Error voting on post", error: safeErrorMessage(error) });
   }
 };
 
@@ -144,7 +145,7 @@ export const deletePost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error deleting post", error: error.message });
+      .json({ message: "Error deleting post", error: safeErrorMessage(error) });
   }
 };
 
@@ -180,7 +181,7 @@ export const updatePost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error updating post", error: error.message });
+      .json({ message: "Error updating post", error: safeErrorMessage(error) });
   }
 };
 
@@ -201,6 +202,6 @@ export const getPostById = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error fetching post", error: error.message });
+      .json({ message: "Error fetching post", error: safeErrorMessage(error) });
   }
 };

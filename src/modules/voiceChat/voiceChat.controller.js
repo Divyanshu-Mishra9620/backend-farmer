@@ -4,6 +4,7 @@ import {
   terminateSession,
   getUserVoiceHistory,
 } from "./voiceChat.service.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const startVoiceSession = async (req, res) => {
   try {
@@ -22,7 +23,7 @@ export const startVoiceSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to start voice session",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -102,7 +103,7 @@ export const processVoiceQuery = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to process voice query",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -131,7 +132,7 @@ export const endVoiceSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to end voice session",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -157,7 +158,7 @@ export const getVoiceChatHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to get voice chat history",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };

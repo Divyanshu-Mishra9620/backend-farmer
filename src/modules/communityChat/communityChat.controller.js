@@ -1,5 +1,6 @@
 import * as communityService from "./communityChat.service.js";
 import { validationResult } from "express-validator";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const getChannels = async (req, res) => {
   try {
@@ -32,7 +33,7 @@ export const getChannels = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve channels",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -62,7 +63,7 @@ export const getChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve channel",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -95,7 +96,7 @@ export const createChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to create channel",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -132,7 +133,7 @@ export const joinChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to join channel",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -153,7 +154,7 @@ export const leaveChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to leave channel",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -192,7 +193,7 @@ export const getChannelMessages = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve messages",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -243,7 +244,7 @@ export const sendMessage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to send message",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -278,7 +279,7 @@ export const addReaction = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to add reaction",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -313,7 +314,7 @@ export const removeReaction = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to remove reaction",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -333,7 +334,7 @@ export const getUserChannels = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve user channels",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -372,7 +373,7 @@ export const getChannelMembers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve channel members",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -417,7 +418,7 @@ export const updateChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update channel",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -461,7 +462,7 @@ export const deleteMessage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete message",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -499,7 +500,7 @@ export const togglePin = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to toggle pin",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -530,7 +531,7 @@ export const getPinnedMessages = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve pinned messages",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -570,7 +571,7 @@ export const searchMessages = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to search messages",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
@@ -604,7 +605,7 @@ export const getChannelAnalytics = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve channel analytics",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };

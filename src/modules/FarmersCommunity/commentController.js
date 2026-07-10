@@ -1,4 +1,6 @@
 import { Comment } from "./CommentModel.js";
+import { Post } from "./PostModel.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const getCommentsForPost = async (req, res) => {
   try {
@@ -24,7 +26,7 @@ export const getCommentsForPost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error fetching comments", error: error.message });
+      .json({ message: "Error fetching comments", error: safeErrorMessage(error) });
   }
 };
 
@@ -38,6 +40,11 @@ export const createComment = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Comment message cannot be empty" });
+    }
+
+    const postExists = await Post.exists({ _id: postId });
+    if (!postExists) {
+      return res.status(404).json({ message: "Post not found" });
     }
 
     const newComment = new Comment({
@@ -58,7 +65,7 @@ export const createComment = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error creating comment", error: error.message });
+      .json({ message: "Error creating comment", error: safeErrorMessage(error) });
   }
 };
 
@@ -86,7 +93,7 @@ export const deleteComment = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error deleting comment", error: error.message });
+      .json({ message: "Error deleting comment", error: safeErrorMessage(error) });
   }
 };
 
@@ -160,6 +167,6 @@ export const voteComment = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error voting on comment", error: error.message });
+      .json({ message: "Error voting on comment", error: safeErrorMessage(error) });
   }
 };

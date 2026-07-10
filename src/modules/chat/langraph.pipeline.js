@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import config from "../../config/env.js";
 import { createLogger } from "../../shared/utils/logger.js";
 import { aiCache, LRUCache } from "../../shared/utils/cache.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 const logger = createLogger("LangGraph");
 
@@ -441,7 +442,7 @@ export async function executeFarmerAssistantPipeline(messages, context = {}) {
 
     return {
       replies: [{ role: "assistant", content: fallbackResponse }],
-      error: error.message,
+      error: safeErrorMessage(error),
       fallback: true,
     };
   }
