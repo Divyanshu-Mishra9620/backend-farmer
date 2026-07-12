@@ -32,9 +32,6 @@ export const processVoiceQuery = async (req, res) => {
   try {
     const userId = req?.user?.id;
 
-    console.log("[Voice] Request body:", req?.body);
-    console.log("[Voice] Request file:", req?.file ? "Present" : "Not present");
-
     if (!req?.file && !req?.body?.audioData) {
       return res.status(400).json({
         success: false,

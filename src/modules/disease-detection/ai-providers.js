@@ -41,7 +41,6 @@ export class GroqProvider {
     }
 
     const result = await response.json();
-    console.log("Groq API Response:", JSON.stringify(result, null, 2));
 
     const content = result.choices?.[0]?.message?.content;
     if (!content) {
@@ -100,8 +99,6 @@ Analyze the image carefully and provide specific, actionable recommendations. En
 
   parseResponse(content) {
     try {
-      console.log("Raw Groq Response:", content);
-
       let jsonStr = content.trim();
 
       const markdownMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);

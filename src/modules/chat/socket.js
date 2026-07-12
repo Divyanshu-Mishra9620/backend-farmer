@@ -22,7 +22,7 @@ const authenticateSocket = async (socket, next) => {
       return next(new Error("Authentication token required"));
     }
 
-    const decoded = jwt.verify(token, config.jwtSecret);
+    const decoded = jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] });
     socket.userId = decoded.id || decoded.userId;
     socket.userInfo = decoded;
 
@@ -174,10 +174,9 @@ export function initSocket(server) {
     cors: {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (
-          config.allowedOrigins.includes("*") ||
-          config.allowedOrigins.includes(origin)
-        ) {
+        // No wildcard branch here — see the matching comment in
+        // src/loaders/express.js for why "*" + credentials:true is unsafe.
+        if (config.allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
         return callback(new Error("Not allowed by CORS"));

@@ -276,6 +276,17 @@ export const addReaction = async (req, res) => {
     });
   } catch (error) {
     console.error("Add reaction error:", error);
+
+    if (error.message === "Message not found") {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+    if (error.message === "Access denied") {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of that channel to react to its messages",
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Failed to add reaction",
@@ -311,6 +322,17 @@ export const removeReaction = async (req, res) => {
     });
   } catch (error) {
     console.error("Remove reaction error:", error);
+
+    if (error.message === "Message not found") {
+      return res.status(404).json({ success: false, message: "Message not found" });
+    }
+    if (error.message === "Access denied") {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a member of that channel to react to its messages",
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Failed to remove reaction",

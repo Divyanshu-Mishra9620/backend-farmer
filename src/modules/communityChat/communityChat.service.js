@@ -313,6 +313,11 @@ export const addReaction = async (messageId, userId, emoji) => {
     throw new Error("Message not found");
   }
 
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
+  }
+
   message.reactions = message.reactions.filter(
     (r) => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
   );
@@ -329,6 +334,11 @@ export const removeReaction = async (messageId, userId, emoji) => {
     throw new Error("Message not found");
   }
 
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
+  }
+
   message.reactions = message.reactions.filter(
     (r) => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
   );
@@ -341,6 +351,11 @@ export const toggleMessageReaction = async (messageId, userId, emoji) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
     throw new Error("Message not found");
+  }
+
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
   }
 
   const existingReaction = message.reactions.find(

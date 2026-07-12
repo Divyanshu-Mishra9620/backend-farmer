@@ -31,7 +31,7 @@ export const logout = async (req, res, next) => {
 export const refresh = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
-    const accessToken = await authService.refreshAccessToken(refreshToken);
+    const { accessToken } = await authService.refreshAccessToken(refreshToken);
     res.json({ accessToken });
   } catch (err) {
     next(err);

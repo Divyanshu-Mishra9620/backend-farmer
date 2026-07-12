@@ -26,9 +26,18 @@ export const signup = async (userData) => {
     throw new Error("All fields are required");
   }
   const hashedPwd = await hashPassword(password);
+  // Explicit field allowlist, not `...userData` — signup is currently only
+  // blocked from setting e.g. `role: "admin"` by Joi rejecting unknown keys
+  // by default, which is fragile the moment that schema is ever relaxed.
   const user = new User({
-    ...userData,
+    name,
+    email,
     password: hashedPwd,
+    state,
+    district,
+    address,
+    dob,
+    phone,
   });
 
   await user.save();

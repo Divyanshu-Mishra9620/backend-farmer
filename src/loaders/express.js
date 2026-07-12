@@ -44,10 +44,11 @@ export default async function expressLoader() {
     cors({
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (
-          allowedOrigins.includes("*") ||
-          allowedOrigins.includes(origin)
-        ) {
+        // No wildcard branch here on purpose: a "*" entry combined with
+        // credentials: true below is a credentialed-CORS bypass waiting for
+        // an ALLOWED_ORIGINS env misconfiguration to trigger it. Add real
+        // origins to ALLOWED_ORIGINS instead.
+        if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
         logger.warn(`Blocked CORS request from origin: ${origin}`);

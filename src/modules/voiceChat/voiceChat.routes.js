@@ -40,9 +40,6 @@ router.post(
           error: err.message,
         });
       }
-      console.log("[Voice] Multer processed successfully");
-      console.log("[Voice] req.body:", req.body);
-      console.log("[Voice] req.file:", req.file ? "exists" : "missing");
       next();
     });
   },
