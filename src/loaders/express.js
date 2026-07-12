@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
+import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 import config from "../config/env.js";
 import routes from "../modules/index.js";
@@ -77,6 +78,7 @@ export default async function expressLoader() {
   app.use(express.static("public"));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(cookieParser());
 
   // Health check
   app.get("/health", (req, res) => {
