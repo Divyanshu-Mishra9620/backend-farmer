@@ -2,6 +2,7 @@ import { Router } from "express";
 import { body, param, query } from "express-validator";
 import * as communityController from "./communityChat.controller.js";
 import { authMiddleware as authenticateToken } from "../../shared/middlewares/authMiddleware.js";
+import upload from "../../shared/middlewares/uploadMiddleware.js";
 
 const router = Router();
 
@@ -96,6 +97,18 @@ router.put(
   param("channelId").isMongoId().withMessage("Invalid channel ID"),
   updateChannelValidation,
   communityController.updateChannel
+);
+router.delete(
+  "/channels/:channelId",
+  param("channelId").isMongoId().withMessage("Invalid channel ID"),
+  communityController.deleteChannel
+);
+
+router.post(
+  "/channels/:channelId/attachments",
+  param("channelId").isMongoId().withMessage("Invalid channel ID"),
+  upload.single("file"),
+  communityController.uploadAttachment
 );
 
 router.post(

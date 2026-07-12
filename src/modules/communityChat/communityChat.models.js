@@ -83,9 +83,9 @@ const communityMessageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: true,
       trim: true,
       maxlength: 1000,
+      default: "",
     },
     messageType: {
       type: String,

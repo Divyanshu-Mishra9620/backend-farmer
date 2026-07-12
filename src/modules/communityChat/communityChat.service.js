@@ -21,6 +21,7 @@ export const getChannels = async (options) => {
 
   const skip = (page - 1) * limit;
   const sortOrder = order === "desc" ? -1 : 1;
+  const userObjectId = new mongoose.Types.ObjectId(userId);
 
   const filter = { isActive: true };
 
@@ -52,7 +53,7 @@ export const getChannels = async (options) => {
                 $expr: {
                   $and: [
                     { $eq: ["$channelId", "$$channelId"] },
-                    { $eq: ["$userId", userId] },
+                    { $eq: ["$userId", userObjectId] },
                     { $eq: ["$isActive", true] },
                   ],
                 },
@@ -121,7 +122,7 @@ export const getChannelById = async (channelId, userId) => {
               $expr: {
                 $and: [
                   { $eq: ["$channelId", "$$channelId"] },
-                  { $eq: ["$userId", userId] },
+                  { $eq: ["$userId", new mongoose.Types.ObjectId(userId)] },
                   { $eq: ["$isActive", true] },
                 ],
               },
@@ -176,23 +177,22 @@ export const joinChannel = async (channelId, userId, role = "member") => {
     throw new Error("Channel not found");
   }
 
-  const existingMember = await ChannelMember.findOne({
-    channelId,
-    userId,
-    isActive: true,
-  });
+  const existingMember = await ChannelMember.findOne({ channelId, userId });
 
-  if (existingMember) {
+  if (existingMember?.isActive) {
     throw new Error("Already a member");
   }
 
-  const membership = new ChannelMember({
-    channelId,
-    userId,
-    role,
-  });
-
-  await membership.save();
+  let membership;
+  if (existingMember) {
+    existingMember.isActive = true;
+    existingMember.role = role;
+    existingMember.joinedAt = new Date();
+    existingMember.lastSeen = new Date();
+    membership = await existingMember.save();
+  } else {
+    membership = await new ChannelMember({ channelId, userId, role }).save();
+  }
 
   await CommunityChannel.findByIdAndUpdate(channelId, {
     $inc: { memberCount: 1 },
@@ -259,8 +259,16 @@ export const getChannelMessages = async (options) => {
 
   messages.reverse();
 
+  const messagesWithCounts = messages.map((message) => {
+    const reactionCounts = {};
+    (message.reactions || []).forEach((r) => {
+      reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+    });
+    return { ...message, reactionCounts };
+  });
+
   return {
-    messages,
+    messages: messagesWithCounts,
     pagination: {
       currentPage: page,
       totalPages: Math.ceil(total / limit),
@@ -384,6 +392,7 @@ export const toggleMessageReaction = async (messageId, userId, emoji) => {
     channelId: message.channelId,
     action,
     reactionCounts,
+    reactions: message.reactions,
   };
 };
 
@@ -466,7 +475,7 @@ export const getChannelMembers = async (options) => {
   const skip = (page - 1) * limit;
 
   const filter = {
-    channelId,
+    channelId: new mongoose.Types.ObjectId(channelId),
     isActive: true,
   };
 
@@ -551,6 +560,22 @@ export const canModerateChannel = async (channelId, userId) => {
     channel && channel.createdBy.toString() === userId.toString();
 
   return !!membership || isCreator;
+};
+
+export const deleteChannel = async (channelId, userId) => {
+  const channel = await CommunityChannel.findById(channelId);
+  if (!channel) {
+    throw new Error("Channel not found");
+  }
+
+  if (channel.createdBy.toString() !== userId.toString()) {
+    throw new Error("Unauthorized");
+  }
+
+  channel.isActive = false;
+  await channel.save();
+
+  return channel;
 };
 
 export const updateChannel = async (channelId, updateData) => {

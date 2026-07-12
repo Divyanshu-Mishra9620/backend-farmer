@@ -4,6 +4,7 @@ import * as communityChatService from "../communityChat/communityChat.service.js
 import { Conversation, Analytics } from "./chat.models.js";
 import jwt from "jsonwebtoken";
 import config from "../../config/env.js";
+import User from "../user/user.model.js";
 import {
   checkAiSocketLimit,
   checkGeneralSocketLimit,
@@ -23,8 +24,15 @@ const authenticateSocket = async (socket, next) => {
     }
 
     const decoded = jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] });
-    socket.userId = decoded.id || decoded.userId;
-    socket.userInfo = decoded;
+    const userId = decoded.id || decoded.userId;
+
+    const user = await User.findById(userId).select("name email role");
+    if (!user) {
+      return next(new Error("User not found"));
+    }
+
+    socket.userId = userId;
+    socket.userInfo = { id: userId, name: user.name, email: user.email, role: user.role };
 
     console.log(`User ${socket.userId} authenticated via socket`);
     next();
@@ -385,7 +393,13 @@ export function initSocket(server) {
 
     socket.on(
       "send_community_message",
-      async ({ channelId, content, messageType = "text", mentions = [] }) => {
+      async ({
+        channelId,
+        content,
+        messageType = "text",
+        mentions = [],
+        attachments = [],
+      }) => {
         const limit = checkGeneralSocketLimit(socket.userId);
         if (!limit.allowed) {
           socket.emit("error", {
@@ -411,7 +425,25 @@ export function initSocket(server) {
             return;
           }
 
-          if (!content || !content.trim()) {
+          const safeAttachments = Array.isArray(attachments)
+            ? attachments
+                .filter(
+                  (a) =>
+                    a &&
+                    ["image", "document"].includes(a.type) &&
+                    typeof a.url === "string" &&
+                    a.url.length > 0
+                )
+                .slice(0, 4)
+                .map((a) => ({
+                  type: a.type,
+                  url: a.url,
+                  filename: typeof a.filename === "string" ? a.filename : undefined,
+                  size: typeof a.size === "number" ? a.size : undefined,
+                }))
+            : [];
+
+          if ((!content || !content.trim()) && safeAttachments.length === 0) {
             socket.emit("error", {
               message: "Message content cannot be empty",
             });
@@ -421,9 +453,10 @@ export function initSocket(server) {
           const messageData = {
             channelId,
             userId: socket.userId,
-            content: content.trim(),
-            messageType,
+            content: content ? content.trim() : "",
+            messageType: safeAttachments.length > 0 ? "image" : messageType,
             mentions,
+            attachments: safeAttachments,
           };
 
           const populatedMessage =
@@ -522,6 +555,7 @@ export function initSocket(server) {
               emoji,
               action: result.action,
               reactionCounts: result.reactionCounts,
+              reactions: result.reactions,
             }
           );
         }

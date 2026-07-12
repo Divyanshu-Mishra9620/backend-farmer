@@ -51,10 +51,22 @@ export const getAllPosts = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
+    const postIds = posts.map((post) => post._id);
+    const commentCounts = await Comment.aggregate([
+      { $match: { post: { $in: postIds } } },
+      { $group: { _id: "$post", count: { $sum: 1 } } },
+    ]);
+    const countByPostId = new Map(
+      commentCounts.map(({ _id, count }) => [_id.toString(), count]),
+    );
+
     const totalPosts = await Post.countDocuments();
 
     res.status(200).json({
-      posts,
+      posts: posts.map((post) => ({
+        ...post.toObject(),
+        commentCount: countByPostId.get(post._id.toString()) || 0,
+      })),
       totalPages: Math.ceil(totalPosts / limit),
       currentPage: page,
     });

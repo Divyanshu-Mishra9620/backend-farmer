@@ -249,6 +249,47 @@ export const sendMessage = async (req, res) => {
   }
 };
 
+export const uploadAttachment = async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const userId = req.user.id;
+
+    const isMember = await communityService.isChannelMember(channelId, userId);
+    if (!isMember) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be a channel member to upload attachments",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded",
+      });
+    }
+
+    const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        type: "image",
+        url,
+        filename: req.file.originalname,
+        size: req.file.size,
+      },
+    });
+  } catch (error) {
+    console.error("Upload attachment error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload attachment",
+      error: safeErrorMessage(error),
+    });
+  }
+};
+
 export const addReaction = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -440,6 +481,46 @@ export const updateChannel = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to update channel",
+      error: safeErrorMessage(error),
+    });
+  }
+};
+
+export const deleteChannel = async (req, res) => {
+  try {
+    const { channelId } = req.params;
+    const userId = req.user.id;
+
+    await communityService.deleteChannel(channelId, userId);
+
+    req.app.get("io").to(`channel:${channelId}`).emit("channel_deleted", {
+      channelId,
+    });
+
+    res.json({
+      success: true,
+      message: "Channel deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete channel error:", error);
+
+    if (error.message === "Channel not found") {
+      return res.status(404).json({
+        success: false,
+        message: "Channel not found",
+      });
+    }
+
+    if (error.message === "Unauthorized") {
+      return res.status(403).json({
+        success: false,
+        message: "Only the channel creator can delete this channel",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete channel",
       error: safeErrorMessage(error),
     });
   }
