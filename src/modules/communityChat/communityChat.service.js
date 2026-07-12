@@ -6,6 +6,8 @@ import {
 } from "./communityChat.models.js";
 import mongoose from "mongoose";
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export const getChannels = async (options) => {
   const {
     page = 1,
@@ -27,9 +29,10 @@ export const getChannels = async (options) => {
   }
 
   if (search) {
+    const safeSearch = escapeRegex(search.slice(0, 100));
     filter.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { description: { $regex: search, $options: "i" } },
+      { name: { $regex: safeSearch, $options: "i" } },
+      { description: { $regex: safeSearch, $options: "i" } },
     ];
   }
 
@@ -62,9 +65,11 @@ export const getChannels = async (options) => {
       {
         $lookup: {
           from: "users",
-          localField: "createdBy",
-          foreignField: "_id",
-          select: "name email",
+          let: { creatorId: "$createdBy" },
+          pipeline: [
+            { $match: { $expr: { $eq: ["$_id", "$$creatorId"] } } },
+            { $project: { name: 1, email: 1 } },
+          ],
           as: "creator",
         },
       },
@@ -102,7 +107,7 @@ export const getChannelById = async (channelId, userId) => {
   const channel = await CommunityChannel.aggregate([
     {
       $match: {
-        _id: mongoose.Types.ObjectId(channelId),
+        _id: new mongoose.Types.ObjectId(channelId),
         isActive: true,
       },
     },
@@ -129,9 +134,11 @@ export const getChannelById = async (channelId, userId) => {
     {
       $lookup: {
         from: "users",
-        localField: "createdBy",
-        foreignField: "_id",
-        select: "name email",
+        let: { creatorId: "$createdBy" },
+        pipeline: [
+          { $match: { $expr: { $eq: ["$_id", "$$creatorId"] } } },
+          { $project: { name: 1, email: 1 } },
+        ],
         as: "creator",
       },
     },
@@ -288,10 +295,27 @@ export const sendMessage = async (messageData) => {
   ]);
 };
 
+export const addReply = async (messageId, userId, content) => {
+  const message = await CommunityMessage.findById(messageId);
+  if (!message) {
+    throw new Error("Message not found");
+  }
+
+  message.replies.push({ userId, content });
+  await message.save();
+
+  return message.populate("replies.userId", "name email");
+};
+
 export const addReaction = async (messageId, userId, emoji) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
     throw new Error("Message not found");
+  }
+
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
   }
 
   message.reactions = message.reactions.filter(
@@ -310,11 +334,80 @@ export const removeReaction = async (messageId, userId, emoji) => {
     throw new Error("Message not found");
   }
 
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
+  }
+
   message.reactions = message.reactions.filter(
     (r) => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
   );
 
   await message.save();
+  return message;
+};
+
+export const toggleMessageReaction = async (messageId, userId, emoji) => {
+  const message = await CommunityMessage.findById(messageId);
+  if (!message) {
+    throw new Error("Message not found");
+  }
+
+  const isMember = await isChannelMember(message.channelId, userId);
+  if (!isMember) {
+    throw new Error("Access denied");
+  }
+
+  const existingReaction = message.reactions.find(
+    (r) => r.userId.toString() === userId.toString() && r.emoji === emoji
+  );
+
+  let action;
+  if (existingReaction) {
+    message.reactions = message.reactions.filter(
+      (r) => !(r.userId.toString() === userId.toString() && r.emoji === emoji)
+    );
+    action = "remove";
+  } else {
+    message.reactions.push({ userId, emoji });
+    action = "add";
+  }
+
+  await message.save();
+
+  const reactionCounts = {};
+  message.reactions.forEach((reaction) => {
+    reactionCounts[reaction.emoji] = (reactionCounts[reaction.emoji] || 0) + 1;
+  });
+
+  return {
+    channelId: message.channelId,
+    action,
+    reactionCounts,
+  };
+};
+
+export const editCommunityMessage = async (messageId, userId, newContent) => {
+  const message = await CommunityMessage.findById(messageId);
+
+  if (!message) {
+    throw new Error("Message not found");
+  }
+
+  if (message.userId.toString() !== userId.toString()) {
+    throw new Error("Unauthorized");
+  }
+
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  if (message.createdAt < fifteenMinutesAgo) {
+    throw new Error("Message too old to edit");
+  }
+
+  message.content = newContent.trim();
+  message.isEdited = true;
+  message.editedAt = new Date();
+  await message.save();
+
   return message;
 };
 
@@ -397,11 +490,12 @@ export const getChannelMembers = async (options) => {
   ];
 
   if (search) {
+    const safeSearch = escapeRegex(search.slice(0, 100));
     pipeline.push({
       $match: {
         $or: [
-          { "user.name": { $regex: search, $options: "i" } },
-          { "user.email": { $regex: search, $options: "i" } },
+          { "user.name": { $regex: safeSearch, $options: "i" } },
+          { "user.email": { $regex: safeSearch, $options: "i" } },
         ],
       },
     });
@@ -514,7 +608,7 @@ export const getChannelAnalytics = async (channelId, userId, days = 7) => {
   const analytics = await CommunityAnalytics.aggregate([
     {
       $match: {
-        channelId: mongoose.Types.ObjectId(channelId),
+        channelId: new mongoose.Types.ObjectId(channelId),
         date: { $gte: startDate },
       },
     },
@@ -526,7 +620,7 @@ export const getChannelAnalytics = async (channelId, userId, days = 7) => {
   const overallStats = await CommunityMessage.aggregate([
     {
       $match: {
-        channelId: mongoose.Types.ObjectId(channelId),
+        channelId: new mongoose.Types.ObjectId(channelId),
         createdAt: { $gte: startDate },
       },
     },
@@ -568,7 +662,7 @@ export const searchMessages = async (query, userId, options = {}) => {
     if (!isMember) {
       throw new Error("Access denied");
     }
-    channelFilter.channelId = mongoose.Types.ObjectId(channelId);
+    channelFilter.channelId = new mongoose.Types.ObjectId(channelId);
   } else {
     const userChannels = await ChannelMember.find({
       userId,

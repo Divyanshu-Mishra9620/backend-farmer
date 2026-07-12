@@ -6,6 +6,7 @@ import {
   getAnalysisStats,
   retryFailedAnalysis,
 } from "./detection.service.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const uploadAndAnalyze = async (req, res, next) => {
   try {
@@ -103,7 +104,7 @@ export const uploadAndAnalyze = async (req, res, next) => {
       success: false,
       message: "Failed to analyze image",
       error: errorCode,
-      details: error.message,
+      details: safeErrorMessage(error),
     });
   }
 };

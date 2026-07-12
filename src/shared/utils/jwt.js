@@ -18,5 +18,5 @@ export const generateRefreshToken = (user) => {
 };
 
 export const verifyToken = (token, secret) => {
-  return jwt.verify(token, secret);
+  return jwt.verify(token, secret, { algorithms: ["HS256"] });
 };

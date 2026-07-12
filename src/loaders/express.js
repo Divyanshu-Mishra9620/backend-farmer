@@ -3,6 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
+import cookieParser from "cookie-parser";
+import mongoose from "mongoose";
 import config from "../config/env.js";
 import routes from "../modules/index.js";
 import errorHandler from "../shared/middlewares/errorHandler.js";
@@ -10,10 +12,23 @@ import { generalLimiter } from "../shared/middlewares/rateLimiter.js";
 import { createLogger } from "../shared/utils/logger.js";
 import { aiCache, weatherCache, geoCache } from "../shared/utils/cache.js";
 
+const DB_STATE_LABELS = {
+  0: "disconnected",
+  1: "connected",
+  2: "connecting",
+  3: "disconnecting",
+  99: "uninitialized",
+};
+
 const logger = createLogger("Express");
 
 export default async function expressLoader() {
   const app = express();
+
+  // Trust the platform's reverse proxy (Render/Railway) so req.protocol
+  // reflects the original https:// scheme instead of falling back to http,
+  // which otherwise produces broken/mixed-content image URLs.
+  app.set("trust proxy", 1);
 
   // Security headers
   app.use(
@@ -30,14 +45,15 @@ export default async function expressLoader() {
     cors({
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (
-          allowedOrigins.includes("*") ||
-          allowedOrigins.includes(origin)
-        ) {
+        // No wildcard branch here on purpose: a "*" entry combined with
+        // credentials: true below is a credentialed-CORS bypass waiting for
+        // an ALLOWED_ORIGINS env misconfiguration to trigger it. Add real
+        // origins to ALLOWED_ORIGINS instead.
+        if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
         logger.warn(`Blocked CORS request from origin: ${origin}`);
-        return callback(null, true);
+        return callback(new Error("Not allowed by CORS"));
       },
       credentials: true,
     }),
@@ -62,17 +78,23 @@ export default async function expressLoader() {
   app.use(express.static("public"));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(cookieParser());
 
   // Health check
   app.get("/health", (req, res) => {
-    res.json({
-      success: true,
-      message: "Farmer Assistant API is running",
+    const dbState = mongoose.connection.readyState;
+    const dbConnected = dbState === 1;
+
+    res.status(dbConnected ? 200 : 503).json({
+      success: dbConnected,
+      message: dbConnected
+        ? "Farmer Assistant API is running"
+        : "Farmer Assistant API is degraded",
       timestamp: new Date().toISOString(),
       version: process.env.npm_package_version || "1.0.0",
       environment: config.nodeEnv,
       services: {
-        database: "connected",
+        database: DB_STATE_LABELS[dbState] || "unknown",
         ai_groq: config.groqApiKey ? "configured" : "not_configured",
         ai_gemini: config.geminiApiKey ? "configured" : "not_configured",
         ai_openrouter: config.openrouterApiKey

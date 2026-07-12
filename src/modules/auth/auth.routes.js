@@ -4,6 +4,9 @@ import {
   authMiddleware,
   roleMiddleware,
 } from "../../shared/middlewares/authMiddleware.js";
+import { authLimiter } from "../../shared/middlewares/rateLimiter.js";
+import validateRequest from "../../shared/middlewares/validateRequest.js";
+import { createUserSchema, loginSchema } from "../user/user.validations.js";
 
 const router = Router();
 
@@ -40,10 +43,13 @@ router.post("/signup", validateSignup, authController.signup);
 router.post("/login", authController.login);
 router.post("/refresh", authController.refresh);
 router.post("/logout", authMiddleware, authController.logout);
-router.post("/reset-password", authMiddleware, authController.resetPassword);
 router.get("/profile", authMiddleware, authController.profile);
-router.post("/forgot-password", authController.forgotPassword);
-router.post("/reset-password-token", authController.resetPasswordWithToken);
+router.post("/forgot-password", authLimiter, authController.forgotPassword);
+router.post(
+  "/reset-password-token",
+  authLimiter,
+  authController.resetPasswordWithToken,
+);
 
 router.get(
   "/admin-only",

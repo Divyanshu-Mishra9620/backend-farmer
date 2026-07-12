@@ -1,4 +1,7 @@
-import { comparePassword, hashPassword } from "../../shared/utils/hash.js";
+import {
+  comparePassword,
+  hashPassword,
+} from "../../shared/utils/hash.js";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -6,50 +9,40 @@ import {
 } from "../../shared/utils/jwt.js";
 import User from "../user/user.model.js";
 import { sendEmail } from "../../shared/utils/email.js";
+import config from "../../config/env.js";
 import crypto from "crypto";
 
 export const signup = async (userData) => {
-  try {
-    const { name, email, password, state, district, address, dob } = userData;
+  const { name, email, password, state, district, address, dob, phone } =
+    userData;
 
-    const existingUser = await User.findOne({
-      email: email,
-    });
-    if (existingUser) {
-      throw new Error("User already exists with this email");
-    }
-    if (
-      !name ||
-      !email ||
-      !password ||
-      !state ||
-      !district ||
-      !address ||
-      !dob
-    ) {
-      throw new Error("All fields are required");
-    }
-    const hashedPwd = await hashPassword(password);
-    const user = new User({
-      ...userData,
-      password: hashedPwd,
-    });
-
-    await user.save();
-    return user;
-  } catch (error) {
-    // Handle duplicate key error
-    if (error.code === 11000) {
-      throw new Error("User with this email already exists");
-    }
-    // Handle validation errors
-    if (error.name === "ValidationError") {
-      const messages = Object.values(error.errors).map((e) => e.message);
-      throw new Error(`Validation failed: ${messages.join(", ")}`);
-    }
-    // Re-throw the error
-    throw error;
+  const existingUser = await User.findOne({
+    email: email,
+  });
+  if (existingUser) {
+    throw new Error("User already exists with this email");
   }
+  if (!name || !email || !password || !state || !district || !address || !dob) {
+    throw new Error("All fields are required");
+  }
+  const hashedPwd = await hashPassword(password);
+  // Explicit field allowlist, not `...userData` — signup is currently only
+  // blocked from setting e.g. `role: "admin"` by Joi rejecting unknown keys
+  // by default, which is fragile the moment that schema is ever relaxed.
+  const user = new User({
+    name,
+    email,
+    password: hashedPwd,
+    state,
+    district,
+    address,
+    dob,
+    phone,
+  });
+
+  await user.save();
+  user.password = undefined;
+  return user;
 };
 
 export const login = async (email, password) => {
@@ -72,11 +65,16 @@ export const login = async (email, password) => {
   user.refreshToken = refreshToken;
   await user.save();
 
+  user.password = undefined;
+  user.refreshToken = undefined;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+
   return { user, accessToken, refreshToken };
 };
 
 export const refreshAccessToken = async (refreshToken) => {
-  const payload = verifyToken(refreshToken, process.env.JWT_REFRESH_SECRET);
+  const payload = verifyToken(refreshToken, config.jwtRefreshSecret);
   const user = await User.findById(payload.id);
   if (!user || user.refreshToken !== refreshToken) {
     throw new Error("Invalid refresh token");
@@ -85,18 +83,19 @@ export const refreshAccessToken = async (refreshToken) => {
   return { accessToken };
 };
 
-export const resetPassword = async (userId, newPassword) => {
-  const hashedPassword = await hashPassword(newPassword);
-  return await User.findByIdAndUpdate(userId, { password: hashedPassword });
-};
-
 export const getProfile = async (userId) => {
   return await User.findById(userId).select("-password -refreshToken");
 };
 
+const GENERIC_FORGOT_PASSWORD_RESPONSE = {
+  message: "If an account exists for that email, a reset link has been sent.",
+};
+
 export const forgotPassword = async (email) => {
   const user = await User.findOne({ email });
-  if (!user) throw new Error("User not found");
+  // Always return the same response whether or not the email is registered,
+  // so this endpoint can't be used to enumerate valid accounts.
+  if (!user) return GENERIC_FORGOT_PASSWORD_RESPONSE;
 
   const resetToken = crypto.randomBytes(32).toString("hex");
   const resetTokenHash = crypto
@@ -108,15 +107,15 @@ export const forgotPassword = async (email) => {
   user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
   await user.save();
 
-  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+  const resetUrl = `${config.frontendUrl}/reset-password/${resetToken}`;
   await sendEmail(
     user.email,
     "Password Reset Request",
     `Reset your password using this link: ${resetUrl}`,
-    `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 15 minutes.</p>`,
+    `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 15 minutes.</p>`
   );
 
-  return { message: "Password reset email sent" };
+  return GENERIC_FORGOT_PASSWORD_RESPONSE;
 };
 
 export const resetPasswordWithToken = async (token, newPassword) => {

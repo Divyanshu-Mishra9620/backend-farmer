@@ -34,9 +34,9 @@ router.post(
 router.post("/suggest", authMiddleware, aiLimiter, chatSuggest);
 
 // Utility endpoints
-router.post("/geo/geocode", authMiddleware, geocodeAddress);
-router.get("/weather/current", authMiddleware, getWeather);
-router.get("/market/trends", authMiddleware, getMarketTrends);
+router.post("/geo/geocode", authMiddleware, aiLimiter, geocodeAddress);
+router.get("/weather/current", authMiddleware, aiLimiter, getWeather);
+router.get("/market/trends", authMiddleware, aiLimiter, getMarketTrends);
 router.post("/soil/analyze", authMiddleware, aiLimiter, uploadSingle, analyzeSoil);
 
 export default router;

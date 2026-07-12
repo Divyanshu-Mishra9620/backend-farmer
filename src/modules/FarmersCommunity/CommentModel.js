@@ -22,6 +22,8 @@ const commentSchema = new mongoose.Schema(
     message: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 1000,
     },
     imageUrl: {
       type: String,

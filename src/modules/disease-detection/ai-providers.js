@@ -41,7 +41,6 @@ export class GroqProvider {
     }
 
     const result = await response.json();
-    console.log("Groq API Response:", JSON.stringify(result, null, 2));
 
     const content = result.choices?.[0]?.message?.content;
     if (!content) {
@@ -100,11 +99,9 @@ Analyze the image carefully and provide specific, actionable recommendations. En
 
   parseResponse(content) {
     try {
-      console.log("Raw Groq Response:", content);
-
       let jsonStr = content.trim();
 
-      const markdownMatch = jsonStr.match(/(?:json)?\s*([\s\S]*?)\s*/);
+      const markdownMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (markdownMatch) {
         jsonStr = markdownMatch[1].trim();
       }
@@ -195,8 +192,7 @@ export class GeminiProvider {
         const prompt = this.buildAnalysisPrompt(cropType, location);
 
         const response = await fetch(
-          `
-          ${this.baseUrl}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
+          `${this.baseUrl}/models/gemini-1.5-flash:generateContent?key=${this.apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -243,7 +239,7 @@ export class GeminiProvider {
         if (attempt === maxRetries) break;
 
         console.log(
-          `Gemini attempt ${attempt} failed, retrying:, error.message`
+          `Gemini attempt ${attempt} failed, retrying: ${error.message}`
         );
         await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
       }
@@ -292,7 +288,8 @@ Be specific and provide at least 2-3 items in each array for valid plant images.
   parseResponse(content) {
     try {
       const jsonMatch =
-        content.match(/json\s*([\s\S]*?)\s*/) || content.match(/\{[\s\S]*\}/);
+        content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ||
+        content.match(/\{[\s\S]*\}/);
       const jsonStr = jsonMatch ? jsonMatch[1] || jsonMatch[0] : content;
       const parsed = JSON.parse(jsonStr);
 
@@ -610,12 +607,17 @@ export async function analyzeWithFallback(
         return { ...result, provider: providerName };
       }
 
-      if (result.disease && result.disease !== "Analysis failed") {
+      if (result.disease && !result.error) {
         console.log(`Success with provider: ${providerName}`);
         return { ...result, provider: providerName };
       }
+
+      console.log(
+        `Provider ${providerName} returned a fallback/error response, trying next provider`
+      );
+      lastError = new Error(result.error || "Provider returned no result");
     } catch (error) {
-      console.log(`Provider ${providerName} failed:, error.message`);
+      console.log(`Provider ${providerName} failed: ${error.message}`);
       lastError = error;
       continue;
     }

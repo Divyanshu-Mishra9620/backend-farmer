@@ -33,10 +33,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    languague: {
+    language: {
       type: String,
-      enum: ["english", "hindi"],
-      default: "english",
+      enum: ["en", "hi", "te"],
+      default: "en",
     },
     state: {
       type: String,
@@ -78,10 +78,15 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
 userSchema.virtual("age").get(function () {
+  if (!this.dob) return null;
   const ageDifMs = Date.now() - this.dob.getTime();
   const ageDate = new Date(ageDifMs);
   return Math.abs(ageDate.getUTCFullYear() - 1970);

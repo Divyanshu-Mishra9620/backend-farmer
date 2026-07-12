@@ -1,6 +1,7 @@
 import { Post } from "./PostModel.js";
 import { Comment } from "./CommentModel.js";
 import mongoose from "mongoose";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const createPost = async (req, res) => {
   try {
@@ -28,13 +29,13 @@ export const createPost = async (req, res) => {
     await newPost.save();
     const populatedPost = await Post.findById(newPost._id).populate(
       "author",
-      "name email"
+      "name email",
     );
     res.status(201).json({ ...populatedPost.toObject(), commentCount: 0 });
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error creating post", error: error.message });
+      .json({ message: "Error creating post", error: safeErrorMessage(error) });
   }
 };
 
@@ -60,7 +61,10 @@ export const getAllPosts = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error fetching posts", error: error.message });
+      .json({
+        message: "Error fetching posts",
+        error: safeErrorMessage(error),
+      });
   }
 };
 
@@ -100,7 +104,10 @@ export const votePost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error voting on post", error: error.message });
+      .json({
+        message: "Error voting on post",
+        error: safeErrorMessage(error),
+      });
   }
 };
 
@@ -130,7 +137,7 @@ export const deletePost = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error deleting post", error: error.message });
+      .json({ message: "Error deleting post", error: safeErrorMessage(error) });
   }
 };
 
@@ -151,18 +158,22 @@ export const updatePost = async (req, res) => {
         .json({ message: "You are not authorized to edit this post" });
     }
 
-    const updatedPost = await Post.findByIdAndUpdate(
-      postId,
-      { title, content, imageUrl },
-      { new: true, runValidators: true }
-    ).populate("author", "name email");
+    const updates = {};
+    if (title !== undefined) updates.title = title;
+    if (content !== undefined) updates.content = content;
+    if (imageUrl !== undefined) updates.imageUrl = imageUrl;
+
+    const updatedPost = await Post.findByIdAndUpdate(postId, updates, {
+      new: true,
+      runValidators: true,
+    }).populate("author", "name email");
 
     const commentCount = await Comment.countDocuments({ post: postId });
     res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error updating post", error: error.message });
+      .json({ message: "Error updating post", error: safeErrorMessage(error) });
   }
 };
 
@@ -182,6 +193,6 @@ export const getPostById = async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ message: "Error fetching post", error: error.message });
+      .json({ message: "Error fetching post", error: safeErrorMessage(error) });
   }
 };

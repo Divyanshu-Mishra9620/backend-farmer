@@ -4,10 +4,11 @@ import {
   terminateSession,
   getUserVoiceHistory,
 } from "./voiceChat.service.js";
+import { safeErrorMessage } from "../../shared/utils/safeError.js";
 
 export const startVoiceSession = async (req, res) => {
   try {
-    const { userId } = req?.user;
+    const userId = req?.user?.id;
     const language = req?.body?.language || "hindi";
 
     const session = await createVoiceSession(userId, language);
@@ -22,17 +23,14 @@ export const startVoiceSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to start voice session",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
 
 export const processVoiceQuery = async (req, res) => {
   try {
-    const { userId } = req?.user;
-
-    console.log("[Voice] Request body:", req?.body);
-    console.log("[Voice] Request file:", req?.file ? "Present" : "Not present");
+    const userId = req?.user?.id;
 
     if (!req?.file && !req?.body?.audioData) {
       return res.status(400).json({
@@ -102,16 +100,14 @@ export const processVoiceQuery = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to process voice query",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
 
 export const endVoiceSession = async (req, res) => {
   try {
-    const { userId } = req?.user;
-    console.log(userId);
-    console.log(req?.body, "body");
+    const userId = req?.user?.id;
 
     const sessionId = req?.body?.sessionId;
 
@@ -133,14 +129,14 @@ export const endVoiceSession = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to end voice session",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };
 
 export const getVoiceChatHistory = async (req, res) => {
   try {
-    const { userId } = req?.user;
+    const userId = req?.user?.id;
     const { page = 1, limit = 10 } = req?.query;
 
     const history = await getUserVoiceHistory(
@@ -159,7 +155,7 @@ export const getVoiceChatHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to get voice chat history",
-      error: error.message,
+      error: safeErrorMessage(error),
     });
   }
 };

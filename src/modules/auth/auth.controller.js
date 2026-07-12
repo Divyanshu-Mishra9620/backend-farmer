@@ -1,4 +1,19 @@
 import * as authService from "./auth.service.js";
+import config from "../../config/env.js";
+
+// Web clients get the refresh token as an httpOnly cookie (never readable by
+// JS, so an XSS payload can't exfiltrate it from localStorage the way the
+// audit flagged). Mobile clients have no cookie jar tied to a browser origin,
+// so login/refresh still also return refreshToken in the JSON body for them
+// — the frontend web app just no longer persists that body field anywhere.
+const REFRESH_COOKIE_NAME = "refreshToken";
+const refreshCookieOptions = () => ({
+  httpOnly: true,
+  secure: config.nodeEnv === "production",
+  sameSite: config.nodeEnv === "production" ? "none" : "lax",
+  path: "/api/auth",
+  maxAge: 7 * 24 * 60 * 60 * 1000, // matches the refresh token's own 7d expiry
+});
 
 export const signup = async (req, res, next) => {
   try {
@@ -13,6 +28,7 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const { accessToken, refreshToken, user } = await authService.login(email, password);
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
     res.json({ accessToken, refreshToken, user });
   } catch (err) {
     next(err);
@@ -22,6 +38,7 @@ export const login = async (req, res, next) => {
 export const logout = async (req, res, next) => {
   try {
     await authService.logout(req.user.id);
+    res.clearCookie(REFRESH_COOKIE_NAME, { path: "/api/auth" });
     res.json({ message: "Logged out successfully" });
   } catch (err) {
     next(err);
@@ -30,19 +47,9 @@ export const logout = async (req, res, next) => {
 
 export const refresh = async (req, res, next) => {
   try {
-    const { refreshToken } = req.body;
-    const accessToken = await authService.refreshAccessToken(refreshToken);
+    const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
+    const { accessToken } = await authService.refreshAccessToken(refreshToken);
     res.json({ accessToken });
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const resetPassword = async (req, res, next) => {
-  try {
-    const { newPassword } = req.body;
-    await authService.resetPassword(req.user.id, newPassword);
-    res.json({ message: "Password reset successful" });
   } catch (err) {
     next(err);
   }
