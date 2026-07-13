@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema(
       trim: true,
       minlength: 6,
       maxlength: 100,
+      select: false,
     },
     role: {
       type: String,

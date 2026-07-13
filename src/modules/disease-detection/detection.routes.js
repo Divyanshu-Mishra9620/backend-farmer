@@ -9,6 +9,7 @@ import {
   deleteAnalysis,
 } from "./detection.controller.js";
 import { uploadSingle } from "../../shared/utils/upload.js";
+import { validateImageContent } from "../../shared/middlewares/validateImageContent.js";
 import { authMiddleware } from "../../shared/middlewares/authMiddleware.js";
 import { aiLimiter } from "../../shared/middlewares/rateLimiter.js";
 
@@ -97,6 +98,7 @@ router.post(
   authMiddleware,
   aiLimiter,
   uploadSingle,
+  validateImageContent,
   checkSchema(analysisValidation),
   validate,
   uploadAndAnalyze

@@ -43,7 +43,7 @@ export const updateEmail = async (userId, newEmail) => {
 };
 
 export const changePassword = async (userId, oldPassword, newPassword) => {
-  const user = await User.findById(userId);
+  const user = await User.findById(userId).select("+password");
   if (!user) throw new Error("User not found");
 
   const isMatch = await comparePassword(oldPassword, user.password);

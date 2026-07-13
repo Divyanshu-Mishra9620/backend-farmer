@@ -9,6 +9,7 @@ import {
 import { streamSuggestion, getSuggestion } from "./stream.controller.js";
 
 import { uploadSingle } from "../../shared/utils/upload.js";
+import { validateImageContent } from "../../shared/middlewares/validateImageContent.js";
 import { authMiddleware } from "../../shared/middlewares/authMiddleware.js";
 import {
   aiLimiter,
@@ -37,6 +38,13 @@ router.post("/suggest", authMiddleware, aiLimiter, chatSuggest);
 router.post("/geo/geocode", authMiddleware, aiLimiter, geocodeAddress);
 router.get("/weather/current", authMiddleware, aiLimiter, getWeather);
 router.get("/market/trends", authMiddleware, aiLimiter, getMarketTrends);
-router.post("/soil/analyze", authMiddleware, aiLimiter, uploadSingle, analyzeSoil);
+router.post(
+  "/soil/analyze",
+  authMiddleware,
+  aiLimiter,
+  uploadSingle,
+  validateImageContent,
+  analyzeSoil,
+);
 
 export default router;

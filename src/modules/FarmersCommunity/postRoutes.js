@@ -11,6 +11,7 @@ import {
 
 import { authMiddleware as auth } from "../../shared/middlewares/authMiddleware.js";
 import upload from "../../shared/middlewares/uploadMiddleware.js";
+import { validateImageContent } from "../../shared/middlewares/validateImageContent.js";
 import validateRequest from "../../shared/middlewares/expressValidatorCheck.js";
 
 const router = Router();
@@ -47,6 +48,7 @@ router.post(
   "/",
   auth,
   upload.single("image"),
+  validateImageContent,
   postBodyValidation,
   validateRequest,
   createPost
