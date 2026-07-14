@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import config from "../config/env.js";
+import { ensureWorkingDnsResolver } from "../config/dns.js";
 
 function cleanUri(uri) {
   if (!uri) return uri;
@@ -7,6 +8,8 @@ function cleanUri(uri) {
 }
 
 export default async function connectDB() {
+  ensureWorkingDnsResolver();
+
   const rawUri = config.mongoUri;
   const mongoUri = cleanUri(rawUri);
 
