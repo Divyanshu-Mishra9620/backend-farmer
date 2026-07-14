@@ -1,5 +1,7 @@
+import { Expo } from "expo-server-sdk";
 import User from "./user.model.js";
 import { hashPassword, comparePassword } from "../../shared/utils/hash.js";
+import httpError from "../../shared/utils/httpError.js";
 
 
 export const getProfile = async (userId) => {
@@ -53,5 +55,15 @@ export const changePassword = async (userId, oldPassword, newPassword) => {
   await user.save();
 
   return { message: "Password updated successfully" };
+};
+
+export const updatePushToken = async (userId, pushToken) => {
+  if (pushToken !== null && !Expo.isExpoPushToken(pushToken)) {
+    throw httpError(400, "Invalid push token");
+  }
+
+  return await User.findByIdAndUpdate(userId, { pushToken }, { new: true }).select(
+    "-password -refreshToken"
+  );
 };
 

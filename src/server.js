@@ -2,6 +2,7 @@ import http from "http";
 import config from "./config/env.js";
 import initApp from "./loaders/index.js";
 import { initSocket } from "./modules/chat/socket.js";
+import { startWeatherAlertJob } from "./jobs/weatherAlertJob.js";
 
 (async () => {
   const app = await initApp();
@@ -16,6 +17,10 @@ import { initSocket } from "./modules/chat/socket.js";
     console.log(` Server running on http://localhost:${config.port}`);
     console.log(`Socket.IO server ready for real-time connections`);
     console.log(` Farmer Assistant API ready to serve`);
+
+    if (config.nodeEnv !== "test") {
+      startWeatherAlertJob();
+    }
   });
 
   process.on("SIGTERM", () => {

@@ -25,3 +25,7 @@ export const changePasswordSchema = Joi.object({
 export const updateEmailSchema = Joi.object({
   newEmail: Joi.string().email().required(),
 });
+
+export const pushTokenSchema = Joi.object({
+  pushToken: Joi.string().allow(null).required(),
+});

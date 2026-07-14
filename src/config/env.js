@@ -36,6 +36,9 @@ const config = {
   huggingFaceApiKey: process.env.HUGGINGFACE_API_KEY,
   DEEPGRAM_API_KEY: process.env.DEEPGRAM_API_KEY,
   maxUploadSize: parseInt(process.env.MAX_UPLOAD_SIZE || "5242880", 10),
+
+  expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
+  weatherAlertCron: process.env.WEATHER_ALERT_CRON || "0 */3 * * *",
 };
 
 export default config;

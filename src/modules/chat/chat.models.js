@@ -204,6 +204,15 @@ const userPreferencesSchema = new mongoose.Schema(
       farming_tips: { type: Boolean, default: true },
       pest_alerts: { type: Boolean, default: true },
     },
+    // Cooldown state for the weather-alert job — colocated here rather than
+    // a new collection since it's already per-user, already read/written in
+    // the same pass as notificationPreferences/location. Tracked per alert
+    // type (not one shared slot) so e.g. an ongoing heavy-rain cooldown
+    // can't mask an independently-firing extreme-heat alert.
+    lastWeatherAlert: {
+      heavyRainAt: { type: Date, default: null },
+      extremeHeatAt: { type: Date, default: null },
+    },
   },
   {
     timestamps: true,

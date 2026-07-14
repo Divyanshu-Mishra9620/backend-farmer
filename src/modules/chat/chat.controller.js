@@ -3,12 +3,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import config from "../../config/env.js";
 import fs from "fs";
 import { createLogger } from "../../shared/utils/logger.js";
-import {
-  aiCache,
-  weatherCache,
-  geoCache,
-  LRUCache,
-} from "../../shared/utils/cache.js";
+import { aiCache } from "../../shared/utils/cache.js";
+import { geocodeAddress as geocodeAddressUtil } from "../../shared/utils/geocode.js";
+import { fetchCurrentWeather } from "../../shared/utils/weather.js";
 
 const logger = createLogger("ChatController");
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
@@ -53,45 +50,16 @@ export async function geocodeAddress(req, res, next) {
       });
     }
 
-    // Check cache
-    const cacheKey = LRUCache.generateKey("geo", address);
-    const cached = geoCache.get(cacheKey);
-    if (cached) {
-      logger.info("Geocode cache hit", address);
-      return res.json({ success: true, ...cached, cached: true });
-    }
+    const geoData = await geocodeAddressUtil(address);
 
-    const response = await fetch(
-      `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(address)}&key=${process.env.OPENCAGE_API_KEY || "demo"}&limit=1&countrycode=IN`,
-    );
-
-    if (!response.ok) {
-      throw new Error("Geocoding service error");
-    }
-
-    const data = await response.json();
-
-    if (data.results && data.results.length > 0) {
-      const result = data.results[0];
-      const geoData = {
-        lat: result.geometry.lat,
-        lon: result.geometry.lng,
-        formatted: result.formatted,
-        state: result.components.state,
-        district: result.components.county || result.components.state_district,
-        country: result.components.country,
-      };
-
-      // Cache geocode results (24 hours)
-      geoCache.set(cacheKey, geoData);
-
-      res.json({ success: true, ...geoData });
-    } else {
-      res.status(404).json({
+    if (!geoData) {
+      return res.status(404).json({
         success: false,
         message: "Location not found",
       });
     }
+
+    res.json({ success: true, ...geoData });
   } catch (err) {
     logger.warn("Geocoding error, using fallback", err.message);
     res.json({
@@ -118,40 +86,7 @@ export async function getWeather(req, res, next) {
       });
     }
 
-    // Check cache
-    const cacheKey = LRUCache.generateKey("weather", lat, lon);
-    const cached = weatherCache.get(cacheKey);
-    if (cached) {
-      logger.info("Weather cache hit");
-      return res.json({ success: true, ...cached, cached: true });
-    }
-
-    const apiKey = process.env.OPENWEATHER_API_KEY || "demo";
-    let weatherData;
-
-    if (apiKey === "demo") {
-      weatherData = {
-        main: { temp: 28, humidity: 65 },
-        weather: [{ description: "partly cloudy" }],
-        rain: { "1h": 0 },
-      };
-    } else {
-      const response = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`,
-      );
-      if (!response.ok) throw new Error("Weather service error");
-      weatherData = await response.json();
-    }
-
-    const result = {
-      temp: weatherData.main.temp,
-      humidity: weatherData.main.humidity,
-      description: weatherData.weather[0].description,
-      rain: weatherData.rain?.["1h"] || 0,
-    };
-
-    // Cache weather (10 minutes)
-    weatherCache.set(cacheKey, result);
+    const result = await fetchCurrentWeather(lat, lon);
 
     res.json({ success: true, ...result });
   } catch (err) {

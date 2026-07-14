@@ -70,6 +70,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    pushToken: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     resetPasswordToken: {
       type: String,
       default: null,

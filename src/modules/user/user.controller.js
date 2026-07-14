@@ -37,3 +37,13 @@ export const updateEmail = async (req, res, next) => {
     next(err);
   }
 };
+
+export const updatePushToken = async (req, res, next) => {
+  try {
+    const { pushToken } = req.body;
+    const updatedUser = await userService.updatePushToken(req.user.id, pushToken);
+    res.json(updatedUser);
+  } catch (err) {
+    next(err);
+  }
+};

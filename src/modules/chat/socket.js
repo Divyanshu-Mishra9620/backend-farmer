@@ -10,6 +10,7 @@ import {
   checkGeneralSocketLimit,
 } from "../../shared/utils/socketRateLimiter.js";
 import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import { sendPushToUser } from "../../shared/utils/pushSender.js";
 
 let io;
 
@@ -475,6 +476,29 @@ export function initSocket(server) {
                 mentionedBy: socket.userInfo,
               });
             });
+
+            // Push delivery for when a mentioned user isn't in the app to
+            // receive the socket events above. One batched lookup instead
+            // of one query per mention. Fire-and-forget — must not delay
+            // message delivery to the rest of the channel.
+            User.find({ _id: { $in: mentions } })
+              .select("pushToken")
+              .then((mentionedUsers) => {
+                return Promise.all(
+                  mentionedUsers
+                    .filter((mentioned) => mentioned.pushToken)
+                    .map((mentioned) =>
+                      sendPushToUser(mentioned.pushToken, {
+                        title: `${socket.userInfo?.name ?? "Someone"} mentioned you`,
+                        body: (populatedMessage.content || "New mention").slice(0, 120),
+                        data: { url: `krishiapp://community/chat/${channelId}` },
+                      })
+                    )
+                );
+              })
+              .catch((err) =>
+                console.error("Push send failed for mentions:", err.message)
+              );
           }
 
           console.log(
