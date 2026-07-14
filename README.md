@@ -1,171 +1,53 @@
 # KrishiApp Backend
 
-Express/MongoDB API powering **KrishiApp**, a multilingual (English / Hindi / Telugu) platform that gives Indian farmers an AI farming advisor, crop-disease diagnosis, weather and market data, government scheme info, and a farmer community — serving both the [KrishiApp mobile app](https://github.com/GovindSharma0708/KrishiApp) (React Native/Expo) and a companion web client.
+The API powering **KrishiApp** — a multilingual (English / Hindi / Telugu) platform built to give Indian farmers an AI farming advisor, crop-disease diagnosis, weather and market data, government scheme info, and a farmer community, all in one place. This service powers both the [KrishiApp mobile app](https://github.com/GovindSharma0708/KrishiApp) and a companion web client.
 
-## Features
+## What it does
 
-- **Auth** — signup/login/refresh/logout, forgot/reset password (email-based, hashed tokens), JWT access + refresh tokens, role-based access (`user`/`admin`/`support`)
-- **Crop disease detection** — image upload → AI analysis pipeline (Groq / Gemini / Hugging Face providers via LangGraph), history, retry, stats
-- **AI farming advisor** — LangGraph-based chat pipeline, streaming responses, soil image analysis
-- **Weather & market data** — current weather (OpenWeather), geocoding (OpenCage), crop market price trends
-- **Voice assistant** — audio query sessions transcribed and answered via Deepgram
-- **Farmer community** — posts with images, threaded comments, upvote/downvote
-- **Community chat** — topic channels, real-time messaging, reactions, pinning, mentions, moderation, analytics, search (Socket.IO)
-- **Government schemes** — public read API for scheme info (admin-managed, so content updates don't require an app release)
+- **AI farming advisor** — chat-based guidance for crop and farming questions, with streaming responses and voice input
+- **Crop disease detection** — snap a photo of a plant and get an AI diagnosis with treatment suggestions
+- **Weather & market prices** — local weather and crop price trends, so farmers can plan around them
+- **Government schemes** — a browsable, kept-up-to-date list of schemes farmers can benefit from
+- **Farmer community** — posts, comments, and topic-based chat channels for farmers to help each other
+- **Accounts** — secure signup/login with password reset, in the farmer's language of choice
 
 ## Tech stack
 
-- **Runtime**: Node.js 20 (ESM), Express 5
-- **Database**: MongoDB via Mongoose
-- **Real-time**: Socket.IO
-- **Auth**: JSON Web Tokens (access + refresh), bcrypt
-- **AI**: LangChain / LangGraph, Groq, Google Gemini, Hugging Face, Deepgram
-- **Storage**: Cloudinary (images), Multer (uploads)
-- **Validation**: Joi, express-validator
-- **Ops**: Helmet, CORS allowlist, rate limiting, Morgan logging, structured logger
-
-## Project structure
-
-```
-src/
-  config/         # env loading, DNS resolver fallback
-  loaders/        # app bootstrap: mongoose connection, express app, route mounting
-  modules/        # one folder per domain, each with routes/controller/service/model
-    auth/
-    user/
-    disease-detection/
-    chat/                 # advisor, weather, market, soil analysis, Socket.IO
-    voiceChat/
-    FarmersCommunity/     # posts + comments
-    communityChat/        # channels + real-time messaging
-    schemes/               # government schemes
-  shared/
-    middlewares/    # authMiddleware, rateLimiter, errorHandler, validators, uploads
-    utils/          # jwt, hash, email, cloudinary, cache, logger, httpError
-scripts/
-  seedSchemes.js    # seeds the government schemes collection
-```
-
-Each module follows the same layering: `*.routes.js` → `*.controller.js` (try/catch → `next(err)`) → `*.service.js` (business logic, throws `httpError(status, message)`) → `*.model.js` (Mongoose schema). Errors flow to a single central `errorHandler` middleware that returns a consistent `{ success, error: { code, message } }` shape.
+Node.js + Express, MongoDB, Socket.IO for real-time chat, JWT-based auth, and a LangGraph-orchestrated AI pipeline (Groq / Gemini / Hugging Face) for the advisor and disease detection features. Images go through Cloudinary; voice queries through Deepgram.
 
 ## Getting started
 
 ### Prerequisites
 
-- Node.js `>=18` (repo pins `20.11.0` via `.nvmrc`)
-- A MongoDB connection string (e.g. MongoDB Atlas)
+- Node.js 20 (see `.nvmrc`)
+- A MongoDB connection string
 
-### Install
+### Install & run
 
 ```bash
 npm install
+cp .env.example .env   # fill in your own keys and connection string
+npm run dev             # http://localhost:<PORT>, auto-reloads
 ```
 
-### Configure environment
-
-Create a `.env` file in the project root:
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `PORT` | | Server port (default `3000`) |
-| `NODE_ENV` | | `development` \| `production` |
-| `DATABASE_URL` | ✅ | MongoDB connection string |
-| `JWT_SECRET` | ✅ | Access token signing secret |
-| `JWT_REFRESH_SECRET` | ✅ | Refresh token signing secret |
-| `FRONTEND_URL` | | Used to build password-reset links |
-| `ALLOWED_ORIGINS` | | Comma-separated CORS allowlist |
-| `EMAIL_USER` / `EMAIL_PASS` | | SMTP credentials for password-reset emails |
-| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | | Image uploads |
-| `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` / `HUGGINGFACE_API_KEY` | | AI providers for advisor & disease detection |
-| `DEEPGRAM_API_KEY` | | Voice assistant transcription |
-| `OPENWEATHER_API_KEY` | | Weather data |
-| `OPENCAGE_API_KEY` | | Geocoding |
-| `MARKET_API_URL` / `MARKET_API_KEY` | | Crop market price data |
-| `MAX_UPLOAD_SIZE` | | Upload size limit in bytes (default 5MB) |
-
-`JWT_SECRET` and `JWT_REFRESH_SECRET` are required — the server refuses to start without them rather than falling back to an insecure default.
-
-### Run
-
-```bash
-npm run dev      # nodemon, auto-reload
-npm run start    # production
-```
-
-Server starts on `http://localhost:<PORT>`; `GET /health` reports DB connection state, configured AI providers, and cache stats.
+`GET /health` reports whether the service and its database connection are up.
 
 ### Seed reference data
 
 ```bash
-npm run seed:schemes    # idempotent — safe to re-run
+npm run seed:schemes
 ```
 
 ### Test & lint
 
 ```bash
-npm test     # jest
+npm test
 npm run lint
 ```
 
-## API overview
+## Project structure
 
-All routes are mounted under `/api`. Endpoints marked 🔒 require `Authorization: Bearer <accessToken>`; 🔒👑 additionally require an `admin` role.
-
-### Auth — `/api/auth`
-| Method | Path | Notes |
-|---|---|---|
-| POST | `/signup` | |
-| POST | `/login` | rate-limited |
-| POST | `/refresh` | reads refresh token from httpOnly cookie or body |
-| POST | `/logout` | 🔒 |
-| GET | `/profile` | 🔒 |
-| POST | `/forgot-password` | rate-limited, always returns a generic response |
-| POST | `/reset-password-token` | rate-limited |
-
-### User — `/api/user`
-`GET /me` 🔒 · `PUT /me` 🔒 · `PUT /me/change-password` 🔒 · `PUT /me/change-email` 🔒
-
-### Disease detection — `/api/disease-detection`
-`POST /` 🔒 (image upload + analysis) · `GET /` 🔒 (list, paginated) · `GET /:id` 🔒 · `GET /stats/summary` 🔒 · `POST /:id/retry` 🔒 · `DELETE /:id` 🔒
-
-### Advisor / weather / market — `/api`
-`POST /suggest` 🔒 · `POST /suggestions/suggest-stream` 🔒 · `POST /suggestions/suggest-direct` 🔒 · `POST /geo/geocode` 🔒 · `GET /weather/current` 🔒 · `GET /market/trends` 🔒 · `POST /soil/analyze` 🔒
-
-### Voice assistant — `/api/voice-chat`
-`POST /start-session` 🔒 · `POST /process-audio` 🔒 · `POST /end-session` 🔒 · `GET /history` 🔒
-
-### Farmer community — `/api/posts`, `/api/comments`
-Posts: `GET /` · `POST /` 🔒 · `GET /:postId` · `PATCH /:postId` 🔒 · `DELETE /:postId` 🔒 · `POST /:postId/vote` 🔒
-Comments: `GET /:postId/comments` · `POST /:postId/comments` 🔒 · `PUT /:commentId` 🔒 · `DELETE /:commentId` 🔒 · `POST /:commentId/vote` 🔒
-
-### Community chat — `/api/community` (all routes 🔒)
-Channels: `GET /channels` · `POST /channels` · `GET /channels/my` · `GET /channels/:channelId` · `PUT /channels/:channelId` · `DELETE /channels/:channelId` · `POST /channels/:channelId/join` · `POST /channels/:channelId/leave` · `GET /channels/:channelId/members` · `GET /channels/:channelId/analytics`
-Messages: `GET /channels/:channelId/messages` · `POST /channels/:channelId/messages` · `DELETE /messages/:messageId` · `POST /messages/:messageId/pin` · `GET /channels/:channelId/pinned-messages` · `POST /channels/:channelId/attachments`
-Reactions: `POST /messages/:messageId/reactions` · `DELETE /messages/:messageId/reactions`
-Search: `GET /search`
-
-### Government schemes — `/api/schemes`
-`GET /` (public) · `POST /` 🔒👑 · `PUT /:id` 🔒👑 · `DELETE /:id` 🔒👑
-
-### Real-time (Socket.IO)
-Community chat also runs over WebSocket for live messaging: `join_community_channel`, `leave_community_channel`, `community_typing`, `reply_to_message`, `edit_community_message`, `delete_community_message`, `toggle_message_reaction`, `get_online_members`, plus `join_conversation`, `analyze_soil`, and `request_weather` for the advisor chat.
-
-## Error responses
-
-All errors share one shape:
-
-```json
-{
-  "success": false,
-  "error": { "code": "UNAUTHORIZED", "message": "Invalid email or password" }
-}
-```
-
-In non-production environments, responses also include a `debug` block with the original message and a truncated stack trace.
-
-## Deployment
-
-Deployable as-is to Railway (`railway.json`, health-checked against `/health`) or Vercel (`vercel.json`); `Procfile` supports any Heroku-style platform. Set the environment variables above on whichever platform you deploy to.
+Each feature (auth, disease detection, advisor chat, community, community chat, schemes, etc.) lives in its own module under `src/modules/`, following the same routes → controller → service → model layering, with shared middleware and utilities under `src/shared/`.
 
 ## License
 
