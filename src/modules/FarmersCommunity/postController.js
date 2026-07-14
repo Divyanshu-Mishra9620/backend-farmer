@@ -1,17 +1,15 @@
 import { Post } from "./PostModel.js";
 import { Comment } from "./CommentModel.js";
 import mongoose from "mongoose";
-import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import httpError from "../../shared/utils/httpError.js";
 
-export const createPost = async (req, res) => {
+export const createPost = async (req, res, next) => {
   try {
     const { title, content } = req.body;
     const authorId = req.user.id;
 
     if (!title || !content) {
-      return res
-        .status(400)
-        .json({ message: "Title and content are required" });
+      throw httpError(400, "Title and content are required");
     }
 
     let imageUrl = null;
@@ -33,13 +31,11 @@ export const createPost = async (req, res) => {
     );
     res.status(201).json({ ...populatedPost.toObject(), commentCount: 0 });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error creating post", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const getAllPosts = async (req, res) => {
+export const getAllPosts = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
@@ -71,16 +67,11 @@ export const getAllPosts = async (req, res) => {
       currentPage: page,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "Error fetching posts",
-        error: safeErrorMessage(error),
-      });
+    next(error);
   }
 };
 
-export const votePost = async (req, res) => {
+export const votePost = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const { voteType } = req.body;
@@ -100,7 +91,7 @@ export const votePost = async (req, res) => {
     } else if (voteType === "none") {
       updateQuery = { $pull: { upvotes: userId, downvotes: userId } };
     } else {
-      return res.status(400).json({ message: "Invalid vote type" });
+      throw httpError(400, "Invalid vote type");
     }
 
     const updatedPost = await Post.findByIdAndUpdate(postId, updateQuery, {
@@ -108,35 +99,28 @@ export const votePost = async (req, res) => {
     }).populate("author", "name email");
 
     if (!updatedPost) {
-      return res.status(404).json({ message: "Post not found" });
+      throw httpError(404, "Post not found");
     }
 
     const commentCount = await Comment.countDocuments({ post: postId });
     res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "Error voting on post",
-        error: safeErrorMessage(error),
-      });
+    next(error);
   }
 };
 
-export const deletePost = async (req, res) => {
+export const deletePost = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const userId = req.user.id;
 
     const post = await Post.findById(postId);
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      throw httpError(404, "Post not found");
     }
 
     if (post.author.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to delete this post" });
+      throw httpError(403, "You are not authorized to delete this post");
     }
 
     await Comment.deleteMany({ post: postId });
@@ -147,13 +131,11 @@ export const deletePost = async (req, res) => {
       message: "Post and all associated comments deleted successfully",
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error deleting post", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const updatePost = async (req, res) => {
+export const updatePost = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const { title, content, imageUrl } = req.body;
@@ -161,13 +143,11 @@ export const updatePost = async (req, res) => {
 
     const post = await Post.findById(postId);
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      throw httpError(404, "Post not found");
     }
 
     if (post.author.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to edit this post" });
+      throw httpError(403, "You are not authorized to edit this post");
     }
 
     const updates = {};
@@ -183,28 +163,24 @@ export const updatePost = async (req, res) => {
     const commentCount = await Comment.countDocuments({ post: postId });
     res.status(200).json({ ...updatedPost.toObject(), commentCount });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error updating post", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const getPostById = async (req, res) => {
+export const getPostById = async (req, res, next) => {
   try {
     const { postId } = req.params;
     if (!mongoose.Types.ObjectId.isValid(postId)) {
-      return res.status(400).json({ message: "Invalid Post ID" });
+      throw httpError(400, "Invalid Post ID");
     }
 
     const post = await Post.findById(postId).populate("author", "name email");
     if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+      throw httpError(404, "Post not found");
     }
 
     res.status(200).json(post);
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching post", error: safeErrorMessage(error) });
+    next(error);
   }
 };

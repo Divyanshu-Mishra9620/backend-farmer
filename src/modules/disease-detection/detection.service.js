@@ -4,6 +4,7 @@ import Analysis from "./analysis.mode.js";
 import { executeAnalysisPipeline } from "./langraph.pipeline.js";
 import { uploadToCloudinary } from "../../shared/utils/cloudinary.js";
 import config from "../../config/env.js";
+import httpError from "../../shared/utils/httpError.js";
 
 export const analyzeImage = async ({
   filePath,
@@ -125,7 +126,7 @@ export const getAnalysis = async (analysisId, userId = null) => {
 
   const analysis = await Analysis.findOne(query);
   if (!analysis) {
-    throw new Error("Analysis not found");
+    throw httpError(404, "Analysis not found");
   }
 
   return analysis;
@@ -193,7 +194,7 @@ export const retryFailedAnalysis = async (analysisId, userId = null) => {
   const analysis = await getAnalysis(analysisId, userId);
 
   if (analysis.status !== "failed") {
-    throw new Error("Only failed analyses can be retried");
+    throw httpError(400, "Only failed analyses can be retried");
   }
 
   analysis.status = "pending";

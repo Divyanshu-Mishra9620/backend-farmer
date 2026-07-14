@@ -6,32 +6,23 @@ import {
   getAnalysisStats,
   retryFailedAnalysis,
 } from "./detection.service.js";
-import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import httpError from "../../shared/utils/httpError.js";
 
 export const uploadAndAnalyze = async (req, res, next) => {
   try {
     const file = req.file;
     if (!file) {
-      return res.status(400).json({
-        message: "Image file is required",
-        error: "NO_FILE_UPLOADED",
-      });
+      throw httpError(400, "Image file is required");
     }
 
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.mimetype)) {
-      return res.status(400).json({
-        message: "Only JPEG, PNG, and WebP images are allowed",
-        error: "INVALID_FILE_TYPE",
-      });
+      throw httpError(400, "Only JPEG, PNG, and WebP images are allowed");
     }
 
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      return res.status(400).json({
-        message: "File size must be less than 10MB",
-        error: "FILE_TOO_LARGE",
-      });
+      throw httpError(400, "File size must be less than 10MB");
     }
 
     const {
@@ -84,28 +75,30 @@ export const uploadAndAnalyze = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("Upload and analyze error:", error);
-
-    let statusCode = 500;
-    let errorCode = "ANALYSIS_FAILED";
-
-    if (error.message.includes("API key")) {
-      statusCode = 503;
-      errorCode = "AI_SERVICE_UNAVAILABLE";
-    } else if (error.message.includes("rate limit")) {
-      statusCode = 429;
-      errorCode = "RATE_LIMIT_EXCEEDED";
-    } else if (error.message.includes("timeout")) {
-      statusCode = 504;
-      errorCode = "REQUEST_TIMEOUT";
+    if (error.isAppError) {
+      return next(error);
     }
 
-    return res.status(statusCode).json({
-      success: false,
-      message: "Failed to analyze image",
-      error: errorCode,
-      details: safeErrorMessage(error),
-    });
+    // analyzeImage() rethrows whatever the AI pipeline/provider threw;
+    // translate known failure reasons to the right status instead of a
+    // blanket 500 so the client can tell "try again" apart from "wait".
+    if (error.message?.includes("API key")) {
+      return next(
+        httpError(503, "The AI service is temporarily unavailable. Please try again shortly."),
+      );
+    }
+    if (error.message?.includes("rate limit")) {
+      return next(
+        httpError(429, "Too many requests to the AI service. Please wait a moment and try again."),
+      );
+    }
+    if (error.message?.includes("timeout")) {
+      return next(
+        httpError(504, "The AI service took too long to respond. Please try again."),
+      );
+    }
+
+    next(httpError(500, "Failed to analyze image. Please try again."));
   }
 };
 
@@ -115,10 +108,7 @@ export const getAnalysisById = async (req, res, next) => {
     const userId = req.user?.id;
 
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid analysis ID",
-        error: "INVALID_ID",
-      });
+      throw httpError(400, "Invalid analysis ID");
     }
 
     const analysis = await getAnalysis(id, userId);
@@ -142,18 +132,7 @@ export const getAnalysisById = async (req, res, next) => {
       },
     });
   } catch (error) {
-    if (error.message === "Analysis not found") {
-      return res.status(404).json({
-        message: "Analysis not found",
-        error: "NOT_FOUND",
-      });
-    }
-
-    console.error("Get analysis error:", error);
-    return res.status(500).json({
-      message: "Failed to retrieve analysis",
-      error: "RETRIEVAL_FAILED",
-    });
+    next(error);
   }
 };
 
@@ -189,11 +168,7 @@ export const listUserAnalyses = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("List analyses error:", error);
-    return res.status(500).json({
-      message: "Failed to retrieve analyses",
-      error: "LISTING_FAILED",
-    });
+    next(error);
   }
 };
 
@@ -217,11 +192,7 @@ export const getStats = async (req, res, next) => {
       },
     });
   } catch (error) {
-    console.error("Get stats error:", error);
-    return res.status(500).json({
-      message: "Failed to retrieve statistics",
-      error: "STATS_FAILED",
-    });
+    next(error);
   }
 };
 
@@ -231,10 +202,7 @@ export const retryAnalysis = async (req, res, next) => {
     const userId = req.user?.id;
 
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid analysis ID",
-        error: "INVALID_ID",
-      });
+      throw httpError(400, "Invalid analysis ID");
     }
 
     const analysis = await retryFailedAnalysis(id, userId);
@@ -249,25 +217,7 @@ export const retryAnalysis = async (req, res, next) => {
       },
     });
   } catch (error) {
-    if (error.message === "Analysis not found") {
-      return res.status(404).json({
-        message: "Analysis not found",
-        error: "NOT_FOUND",
-      });
-    }
-
-    if (error.message === "Only failed analyses can be retried") {
-      return res.status(400).json({
-        message: "Only failed analyses can be retried",
-        error: "INVALID_STATUS",
-      });
-    }
-
-    console.error("Retry analysis error:", error);
-    return res.status(500).json({
-      message: "Failed to retry analysis",
-      error: "RETRY_FAILED",
-    });
+    next(error);
   }
 };
 
@@ -277,10 +227,7 @@ export const deleteAnalysis = async (req, res, next) => {
     const userId = req.user?.id;
 
     if (!id || !id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid analysis ID",
-        error: "INVALID_ID",
-      });
+      throw httpError(400, "Invalid analysis ID");
     }
 
     const analysis = await getAnalysis(id, userId);
@@ -291,17 +238,6 @@ export const deleteAnalysis = async (req, res, next) => {
       message: "Analysis deleted successfully",
     });
   } catch (error) {
-    if (error.message === "Analysis not found") {
-      return res.status(404).json({
-        message: "Analysis not found",
-        error: "NOT_FOUND",
-      });
-    }
-
-    console.error("Delete analysis error:", error);
-    return res.status(500).json({
-      message: "Failed to delete analysis",
-      error: "DELETE_FAILED",
-    });
+    next(error);
   }
 };

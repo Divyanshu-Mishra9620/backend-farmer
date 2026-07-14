@@ -10,6 +10,7 @@ const ERROR_TYPES = {
   CONFLICT: { status: 409, code: "CONFLICT" },
   RATE_LIMIT: { status: 429, code: "RATE_LIMIT_EXCEEDED" },
   AI_SERVICE: { status: 503, code: "AI_SERVICE_ERROR" },
+  REQUEST_TIMEOUT: { status: 504, code: "REQUEST_TIMEOUT" },
   DATABASE: { status: 500, code: "DATABASE_ERROR" },
   INTERNAL: { status: 500, code: "INTERNAL_ERROR" },
 };
@@ -25,6 +26,8 @@ const STATUS_TO_TYPE = {
   404: ERROR_TYPES.NOT_FOUND,
   409: ERROR_TYPES.CONFLICT,
   429: ERROR_TYPES.RATE_LIMIT,
+  503: ERROR_TYPES.AI_SERVICE,
+  504: ERROR_TYPES.REQUEST_TIMEOUT,
 };
 
 function categorizeError(err) {
