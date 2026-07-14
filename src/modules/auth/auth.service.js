@@ -11,6 +11,7 @@ import User from "../user/user.model.js";
 import { sendEmail } from "../../shared/utils/email.js";
 import config from "../../config/env.js";
 import crypto from "crypto";
+import httpError from "../../shared/utils/httpError.js";
 
 export const signup = async (userData) => {
   const { name, email, password, state, district, address, dob, phone } =
@@ -20,10 +21,10 @@ export const signup = async (userData) => {
     email: email,
   });
   if (existingUser) {
-    throw new Error("User already exists with this email");
+    throw httpError(409, "User already exists with this email");
   }
   if (!name || !email || !password || !state || !district || !address || !dob) {
-    throw new Error("All fields are required");
+    throw httpError(400, "All fields are required");
   }
   const hashedPwd = await hashPassword(password);
   // Explicit field allowlist, not `...userData` — signup is currently only
@@ -48,15 +49,15 @@ export const signup = async (userData) => {
 export const login = async (email, password) => {
   const user = await User.findOne({ email }).select("+password");
   if (!user) {
-    throw new Error("Invalid email or password");
+    throw httpError(401, "Invalid email or password");
   }
   if (!user.isActive) {
-    throw new Error("Your Account is Blocked. Please contact the admin");
+    throw httpError(403, "Your Account is Blocked. Please contact the admin");
   }
   const isMatch = await comparePassword(password, user.password);
 
   if (!isMatch) {
-    throw new Error("Invalid email or password");
+    throw httpError(401, "Invalid email or password");
   }
 
   const accessToken = generateAccessToken(user);
@@ -77,7 +78,7 @@ export const refreshAccessToken = async (refreshToken) => {
   const payload = verifyToken(refreshToken, config.jwtRefreshSecret);
   const user = await User.findById(payload.id);
   if (!user || user.refreshToken !== refreshToken) {
-    throw new Error("Invalid refresh token");
+    throw httpError(401, "Invalid refresh token");
   }
   const accessToken = generateAccessToken(user);
   return { accessToken };
@@ -129,7 +130,7 @@ export const resetPasswordWithToken = async (token, newPassword) => {
     resetPasswordExpires: { $gt: Date.now() },
   });
 
-  if (!user) throw new Error("Invalid or expired reset token");
+  if (!user) throw httpError(400, "Invalid or expired reset token");
 
   user.password = await hashPassword(newPassword);
   user.resetPasswordToken = null;
@@ -141,7 +142,7 @@ export const resetPasswordWithToken = async (token, newPassword) => {
 
 export const logout = async (userId) => {
   const user = await User.findById(userId);
-  if (!user) throw new Error("User not found");
+  if (!user) throw httpError(404, "User not found");
 
   user.refreshToken = null;
   await user.save();

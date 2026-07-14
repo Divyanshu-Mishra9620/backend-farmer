@@ -40,7 +40,7 @@ const validateSignup = (req, res, next) => {
 };
 
 router.post("/signup", validateSignup, authController.signup);
-router.post("/login", authController.login);
+router.post("/login", authLimiter, authController.login);
 router.post("/refresh", authController.refresh);
 router.post("/logout", authMiddleware, authController.logout);
 router.get("/profile", authMiddleware, authController.profile);
