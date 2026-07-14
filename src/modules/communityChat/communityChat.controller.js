@@ -1,8 +1,7 @@
 import * as communityService from "./communityChat.service.js";
-import { validationResult } from "express-validator";
-import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import httpError from "../../shared/utils/httpError.js";
 
-export const getChannels = async (req, res) => {
+export const getChannels = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -29,16 +28,11 @@ export const getChannels = async (req, res) => {
       message: "Channels retrieved successfully",
     });
   } catch (error) {
-    console.error("Get channels error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve channels",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getChannel = async (req, res) => {
+export const getChannel = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const channel = await communityService.getChannelById(
@@ -47,10 +41,7 @@ export const getChannel = async (req, res) => {
     );
 
     if (!channel) {
-      return res.status(404).json({
-        success: false,
-        message: "Channel not found",
-      });
+      throw httpError(404, "Channel not found");
     }
 
     res.json({
@@ -59,26 +50,12 @@ export const getChannel = async (req, res) => {
       message: "Channel retrieved successfully",
     });
   } catch (error) {
-    console.error("Get channel error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const createChannel = async (req, res) => {
+export const createChannel = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: errors.array(),
-      });
-    }
-
     const channelData = {
       ...req.body,
       createdBy: req.user.id,
@@ -92,16 +69,11 @@ export const createChannel = async (req, res) => {
       message: "Channel created successfully",
     });
   } catch (error) {
-    console.error("Create channel error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const joinChannel = async (req, res) => {
+export const joinChannel = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const userId = req.user.id;
@@ -114,31 +86,11 @@ export const joinChannel = async (req, res) => {
       message: "Successfully joined channel",
     });
   } catch (error) {
-    console.error("Join channel error:", error);
-
-    if (error.message === "Channel not found") {
-      return res.status(404).json({
-        success: false,
-        message: "Channel not found",
-      });
-    }
-
-    if (error.message === "Already a member") {
-      return res.status(400).json({
-        success: false,
-        message: "You are already a member of this channel",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to join channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const leaveChannel = async (req, res) => {
+export const leaveChannel = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const userId = req.user.id;
@@ -150,16 +102,11 @@ export const leaveChannel = async (req, res) => {
       message: "Successfully left channel",
     });
   } catch (error) {
-    console.error("Leave channel error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to leave channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getChannelMessages = async (req, res) => {
+export const getChannelMessages = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const { page = 1, limit = 50, before, after } = req.query;
@@ -169,10 +116,7 @@ export const getChannelMessages = async (req, res) => {
       req.user.id
     );
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member to view channel messages",
-      });
+      throw httpError(403, "You must be a member to view channel messages");
     }
 
     const messages = await communityService.getChannelMessages({
@@ -189,26 +133,12 @@ export const getChannelMessages = async (req, res) => {
       message: "Messages retrieved successfully",
     });
   } catch (error) {
-    console.error("Get messages error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve messages",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const sendMessage = async (req, res) => {
+export const sendMessage = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: errors.array(),
-      });
-    }
-
     const { channelId } = req.params;
     const messageData = {
       ...req.body,
@@ -221,10 +151,7 @@ export const sendMessage = async (req, res) => {
       req.user.id
     );
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member to send messages",
-      });
+      throw httpError(403, "You must be a member to send messages");
     }
 
     const message = await communityService.sendMessage(messageData);
@@ -240,33 +167,22 @@ export const sendMessage = async (req, res) => {
       message: "Message sent successfully",
     });
   } catch (error) {
-    console.error("Send message error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to send message",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const uploadAttachment = async (req, res) => {
+export const uploadAttachment = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const userId = req.user.id;
 
     const isMember = await communityService.isChannelMember(channelId, userId);
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a channel member to upload attachments",
-      });
+      throw httpError(403, "You must be a channel member to upload attachments");
     }
 
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded",
-      });
+      throw httpError(400, "No file uploaded");
     }
 
     const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
@@ -281,16 +197,11 @@ export const uploadAttachment = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Upload attachment error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to upload attachment",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const addReaction = async (req, res) => {
+export const addReaction = async (req, res, next) => {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
@@ -316,27 +227,11 @@ export const addReaction = async (req, res) => {
       message: "Reaction added successfully",
     });
   } catch (error) {
-    console.error("Add reaction error:", error);
-
-    if (error.message === "Message not found") {
-      return res.status(404).json({ success: false, message: "Message not found" });
-    }
-    if (error.message === "Access denied") {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member of that channel to react to its messages",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to add reaction",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const removeReaction = async (req, res) => {
+export const removeReaction = async (req, res, next) => {
   try {
     const { messageId } = req.params;
     const { emoji } = req.body;
@@ -362,27 +257,11 @@ export const removeReaction = async (req, res) => {
       message: "Reaction removed successfully",
     });
   } catch (error) {
-    console.error("Remove reaction error:", error);
-
-    if (error.message === "Message not found") {
-      return res.status(404).json({ success: false, message: "Message not found" });
-    }
-    if (error.message === "Access denied") {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member of that channel to react to its messages",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to remove reaction",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getUserChannels = async (req, res) => {
+export const getUserChannels = async (req, res, next) => {
   try {
     const userId = req.user.id;
     const channels = await communityService.getUserChannels(userId);
@@ -393,16 +272,11 @@ export const getUserChannels = async (req, res) => {
       message: "User channels retrieved successfully",
     });
   } catch (error) {
-    console.error("Get user channels error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve user channels",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getChannelMembers = async (req, res) => {
+export const getChannelMembers = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const { page = 1, limit = 50, search, role } = req.query;
@@ -412,10 +286,7 @@ export const getChannelMembers = async (req, res) => {
       req.user.id
     );
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member to view channel members",
-      });
+      throw httpError(403, "You must be a member to view channel members");
     }
 
     const members = await communityService.getChannelMembers({
@@ -432,26 +303,12 @@ export const getChannelMembers = async (req, res) => {
       message: "Channel members retrieved successfully",
     });
   } catch (error) {
-    console.error("Get channel members error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve channel members",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const updateChannel = async (req, res) => {
+export const updateChannel = async (req, res, next) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors: errors.array(),
-      });
-    }
-
     const { channelId } = req.params;
     const userId = req.user.id;
 
@@ -460,10 +317,7 @@ export const updateChannel = async (req, res) => {
       userId
     );
     if (!canModerate) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to modify this channel",
-      });
+      throw httpError(403, "You do not have permission to modify this channel");
     }
 
     const updatedChannel = await communityService.updateChannel(
@@ -477,16 +331,11 @@ export const updateChannel = async (req, res) => {
       message: "Channel updated successfully",
     });
   } catch (error) {
-    console.error("Update channel error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const deleteChannel = async (req, res) => {
+export const deleteChannel = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const userId = req.user.id;
@@ -502,31 +351,11 @@ export const deleteChannel = async (req, res) => {
       message: "Channel deleted successfully",
     });
   } catch (error) {
-    console.error("Delete channel error:", error);
-
-    if (error.message === "Channel not found") {
-      return res.status(404).json({
-        success: false,
-        message: "Channel not found",
-      });
-    }
-
-    if (error.message === "Unauthorized") {
-      return res.status(403).json({
-        success: false,
-        message: "Only the channel creator can delete this channel",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete channel",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const deleteMessage = async (req, res) => {
+export const deleteMessage = async (req, res, next) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
@@ -546,31 +375,11 @@ export const deleteMessage = async (req, res) => {
       message: "Message deleted successfully",
     });
   } catch (error) {
-    console.error("Delete message error:", error);
-
-    if (error.message === "Message not found") {
-      return res.status(404).json({
-        success: false,
-        message: "Message not found",
-      });
-    }
-
-    if (error.message === "Unauthorized") {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to delete this message",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete message",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const togglePin = async (req, res) => {
+export const togglePin = async (req, res, next) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
@@ -588,27 +397,11 @@ export const togglePin = async (req, res) => {
       message: message.isPinned ? "Message pinned" : "Message unpinned",
     });
   } catch (error) {
-    console.error("Toggle pin error:", error);
-
-    if (error.message === "Message not found") {
-      return res.status(404).json({ success: false, message: "Message not found" });
-    }
-    if (error.message === "Unauthorized") {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to pin messages in this channel",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to toggle pin",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getPinnedMessages = async (req, res) => {
+export const getPinnedMessages = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const pinnedMessages = await communityService.getPinnedMessages(
@@ -622,33 +415,13 @@ export const getPinnedMessages = async (req, res) => {
       message: "Pinned messages retrieved successfully",
     });
   } catch (error) {
-    console.error("Get pinned messages error:", error);
-
-    if (error.message === "Access denied") {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member to view pinned messages",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve pinned messages",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const searchMessages = async (req, res) => {
+export const searchMessages = async (req, res, next) => {
   try {
     const { query, channelId, page = 1, limit = 20 } = req.query;
-
-    if (!query || !query.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query is required",
-      });
-    }
 
     const results = await communityService.searchMessages(query, req.user.id, {
       channelId,
@@ -662,24 +435,11 @@ export const searchMessages = async (req, res) => {
       message: "Search completed successfully",
     });
   } catch (error) {
-    console.error("Search messages error:", error);
-
-    if (error.message === "Access denied") {
-      return res.status(403).json({
-        success: false,
-        message: "You must be a member of that channel to search its messages",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to search messages",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getChannelAnalytics = async (req, res) => {
+export const getChannelAnalytics = async (req, res, next) => {
   try {
     const { channelId } = req.params;
     const { days = 7 } = req.query;
@@ -696,19 +456,6 @@ export const getChannelAnalytics = async (req, res) => {
       message: "Channel analytics retrieved successfully",
     });
   } catch (error) {
-    console.error("Get channel analytics error:", error);
-
-    if (error.message === "Unauthorized") {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to view this channel's analytics",
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to retrieve channel analytics",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };

@@ -2,6 +2,7 @@ import config from "../../config/env.js";
 import fetch from "node-fetch";
 import { createLogger } from "../../shared/utils/logger.js";
 import { aiCache, LRUCache } from "../../shared/utils/cache.js";
+import httpError from "../../shared/utils/httpError.js";
 
 const logger = createLogger("StreamController");
 
@@ -219,10 +220,7 @@ export async function getSuggestion(req, res, next) {
     const { query, context } = req.body;
 
     if (!query || typeof query !== "string") {
-      return res.status(400).json({
-        success: false,
-        message: "Query is required and must be a string",
-      });
+      throw httpError(400, "Query is required and must be a string");
     }
 
     // Check cache
@@ -241,10 +239,7 @@ export async function getSuggestion(req, res, next) {
 
     if (!config.groqApiKey) {
       logger.error("Groq API key not configured");
-      return res.status(503).json({
-        success: false,
-        error: "API key not configured",
-      });
+      throw httpError(503, "The AI service is temporarily unavailable. Please try again shortly.");
     }
 
     const enhancedPrompt = buildFarmingPrompt(query, context);
@@ -269,7 +264,7 @@ export async function getSuggestion(req, res, next) {
     );
 
     if (!response.ok) {
-      throw new Error(`Groq API error: ${response.status}`);
+      throw httpError(502, "The AI service returned an error. Please try again.");
     }
 
     const data = await response.json();

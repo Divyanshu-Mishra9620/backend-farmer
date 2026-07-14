@@ -1,8 +1,8 @@
 import { Comment } from "./CommentModel.js";
 import { Post } from "./PostModel.js";
-import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import httpError from "../../shared/utils/httpError.js";
 
-export const getCommentsForPost = async (req, res) => {
+export const getCommentsForPost = async (req, res, next) => {
   try {
     const { postId } = req.params;
 
@@ -24,27 +24,23 @@ export const getCommentsForPost = async (req, res) => {
       currentPage: page,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching comments", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const createComment = async (req, res) => {
+export const createComment = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const { message, imageUrl, parentCommentId } = req.body;
     const authorId = req.user.id;
 
     if (!message) {
-      return res
-        .status(400)
-        .json({ message: "Comment message cannot be empty" });
+      throw httpError(400, "Comment message cannot be empty");
     }
 
     const postExists = await Post.exists({ _id: postId });
     if (!postExists) {
-      return res.status(404).json({ message: "Post not found" });
+      throw httpError(404, "Post not found");
     }
 
     const newComment = new Comment({
@@ -63,26 +59,22 @@ export const createComment = async (req, res) => {
 
     res.status(201).json(populatedComment);
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error creating comment", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const deleteComment = async (req, res) => {
+export const deleteComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
     const userId = req.user.id;
 
     const comment = await Comment.findById(commentId);
     if (!comment) {
-      return res.status(404).json({ message: "Comment not found" });
+      throw httpError(404, "Comment not found");
     }
 
     if (comment.author.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ message: "You are not authorized to delete this comment" });
+      throw httpError(403, "You are not authorized to delete this comment");
     }
 
     comment.isDeleted = true;
@@ -91,13 +83,11 @@ export const deleteComment = async (req, res) => {
 
     res.status(200).json({ message: "Comment deleted successfully", comment });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error deleting comment", error: safeErrorMessage(error) });
+    next(error);
   }
 };
 
-export const editComment = async (req, res) => {
+export const editComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
     const { message } = req.body;
@@ -106,13 +96,11 @@ export const editComment = async (req, res) => {
     const comment = await Comment.findById(commentId);
 
     if (!comment) {
-      return res.status(404).json({ message: "Comment not found" });
+      throw httpError(404, "Comment not found");
     }
 
     if (comment.author.toString() !== userId) {
-      return res
-        .status(403)
-        .json({ message: "Forbidden: You can only edit your own comments" });
+      throw httpError(403, "You can only edit your own comments");
     }
 
     comment.message = message;
@@ -125,12 +113,11 @@ export const editComment = async (req, res) => {
 
     res.status(200).json(updatedComment);
   } catch (error) {
-    console.error("Error editing comment:", error);
-    res.status(500).json({ message: "Internal Server error" });
+    next(error);
   }
 };
 
-export const voteComment = async (req, res) => {
+export const voteComment = async (req, res, next) => {
   try {
     const { commentId } = req.params;
     const { voteType } = req.body;
@@ -150,7 +137,7 @@ export const voteComment = async (req, res) => {
     } else if (voteType === "none") {
       updateQuery = { $pull: { upvotes: userId, downvotes: userId } };
     } else {
-      return res.status(400).json({ message: "Invalid vote type" });
+      throw httpError(400, "Invalid vote type");
     }
 
     const updatedComment = await Comment.findByIdAndUpdate(
@@ -160,13 +147,11 @@ export const voteComment = async (req, res) => {
     ).populate("author", "name email");
 
     if (!updatedComment) {
-      return res.status(404).json({ message: "Comment not found" });
+      throw httpError(404, "Comment not found");
     }
 
     res.status(200).json(updatedComment);
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error voting on comment", error: safeErrorMessage(error) });
+    next(error);
   }
 };

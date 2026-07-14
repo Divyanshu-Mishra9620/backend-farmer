@@ -2,6 +2,7 @@ import VoiceChat from "./voiceChat.model.js";
 import { generateFarmerResponse } from "./ai-assistant.js";
 import { transcribeAudio, synthesizeSpeech } from "./deepgram.service.js";
 import { v4 as uuidv4 } from "uuid";
+import httpError from "../../shared/utils/httpError.js";
 
 export const createVoiceSession = async (userId, language) => {
   const sessionId = uuidv4();
@@ -38,13 +39,13 @@ export const processAudioData = async (
     });
 
     if (!voiceChat) {
-      throw new Error("Voice session not found or expired");
+      throw httpError(404, "Voice session not found or expired");
     }
 
     const transcription = await transcribeAudio(audioData, language, mimetype);
 
     if (!transcription || transcription.trim() === "") {
-      throw new Error("Could not understand the audio. Please speak clearly.");
+      throw httpError(400, "Could not understand the audio. Please speak clearly.");
     }
 
     const aiResponse = await generateFarmerResponse(

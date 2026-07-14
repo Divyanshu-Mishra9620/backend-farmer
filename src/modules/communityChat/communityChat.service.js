@@ -5,6 +5,7 @@ import {
   CommunityAnalytics,
 } from "./communityChat.models.js";
 import mongoose from "mongoose";
+import httpError from "../../shared/utils/httpError.js";
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -174,13 +175,13 @@ export const createChannel = async (channelData) => {
 export const joinChannel = async (channelId, userId, role = "member") => {
   const channel = await CommunityChannel.findById(channelId);
   if (!channel) {
-    throw new Error("Channel not found");
+    throw httpError(404, "Channel not found");
   }
 
   const existingMember = await ChannelMember.findOne({ channelId, userId });
 
   if (existingMember?.isActive) {
-    throw new Error("Already a member");
+    throw httpError(409, "You are already a member of this channel");
   }
 
   let membership;
@@ -306,7 +307,7 @@ export const sendMessage = async (messageData) => {
 export const addReply = async (messageId, userId, content) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   message.replies.push({ userId, content });
@@ -318,12 +319,12 @@ export const addReply = async (messageId, userId, content) => {
 export const addReaction = async (messageId, userId, emoji) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   const isMember = await isChannelMember(message.channelId, userId);
   if (!isMember) {
-    throw new Error("Access denied");
+    throw httpError(403, "You must be a member of that channel to react to its messages");
   }
 
   message.reactions = message.reactions.filter(
@@ -339,12 +340,12 @@ export const addReaction = async (messageId, userId, emoji) => {
 export const removeReaction = async (messageId, userId, emoji) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   const isMember = await isChannelMember(message.channelId, userId);
   if (!isMember) {
-    throw new Error("Access denied");
+    throw httpError(403, "You must be a member of that channel to react to its messages");
   }
 
   message.reactions = message.reactions.filter(
@@ -358,12 +359,12 @@ export const removeReaction = async (messageId, userId, emoji) => {
 export const toggleMessageReaction = async (messageId, userId, emoji) => {
   const message = await CommunityMessage.findById(messageId);
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   const isMember = await isChannelMember(message.channelId, userId);
   if (!isMember) {
-    throw new Error("Access denied");
+    throw httpError(403, "You must be a member of that channel to react to its messages");
   }
 
   const existingReaction = message.reactions.find(
@@ -400,16 +401,16 @@ export const editCommunityMessage = async (messageId, userId, newContent) => {
   const message = await CommunityMessage.findById(messageId);
 
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   if (message.userId.toString() !== userId.toString()) {
-    throw new Error("Unauthorized");
+    throw httpError(403, "You can only edit your own messages");
   }
 
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
   if (message.createdAt < fifteenMinutesAgo) {
-    throw new Error("Message too old to edit");
+    throw httpError(400, "Message too old to edit");
   }
 
   message.content = newContent.trim();
@@ -565,11 +566,11 @@ export const canModerateChannel = async (channelId, userId) => {
 export const deleteChannel = async (channelId, userId) => {
   const channel = await CommunityChannel.findById(channelId);
   if (!channel) {
-    throw new Error("Channel not found");
+    throw httpError(404, "Channel not found");
   }
 
   if (channel.createdBy.toString() !== userId.toString()) {
-    throw new Error("Unauthorized");
+    throw httpError(403, "Only the channel creator can delete this channel");
   }
 
   channel.isActive = false;
@@ -601,14 +602,14 @@ export const deleteMessage = async (messageId, userId) => {
   const message = await CommunityMessage.findById(messageId);
 
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   const isAuthor = message.userId.toString() === userId.toString();
   const canModerate = await canModerateChannel(message.channelId, userId);
 
   if (!isAuthor && !canModerate) {
-    throw new Error("Unauthorized");
+    throw httpError(403, "You do not have permission to delete this message");
   }
 
   message.isDeleted = true;
@@ -624,7 +625,7 @@ export const deleteMessage = async (messageId, userId) => {
 export const getChannelAnalytics = async (channelId, userId, days = 7) => {
   const canModerate = await canModerateChannel(channelId, userId);
   if (!canModerate) {
-    throw new Error("Unauthorized");
+    throw httpError(403, "You do not have permission to view this channel's analytics");
   }
 
   const startDate = new Date();
@@ -685,7 +686,7 @@ export const searchMessages = async (query, userId, options = {}) => {
   if (channelId) {
     const isMember = await isChannelMember(channelId, userId);
     if (!isMember) {
-      throw new Error("Access denied");
+      throw httpError(403, "You must be a member of that channel to search its messages");
     }
     channelFilter.channelId = new mongoose.Types.ObjectId(channelId);
   } else {
@@ -731,12 +732,12 @@ export const toggleMessagePin = async (messageId, userId) => {
   const message = await CommunityMessage.findById(messageId);
 
   if (!message) {
-    throw new Error("Message not found");
+    throw httpError(404, "Message not found");
   }
 
   const canModerate = await canModerateChannel(message.channelId, userId);
   if (!canModerate) {
-    throw new Error("Unauthorized");
+    throw httpError(403, "You do not have permission to pin messages in this channel");
   }
 
   message.isPinned = !message.isPinned;
@@ -748,7 +749,7 @@ export const toggleMessagePin = async (messageId, userId) => {
 export const getPinnedMessages = async (channelId, userId) => {
   const isMember = await isChannelMember(channelId, userId);
   if (!isMember) {
-    throw new Error("Access denied");
+    throw httpError(403, "You must be a member to view pinned messages");
   }
 
   const pinnedMessages = await CommunityMessage.find({

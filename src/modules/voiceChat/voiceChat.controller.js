@@ -4,9 +4,9 @@ import {
   terminateSession,
   getUserVoiceHistory,
 } from "./voiceChat.service.js";
-import { safeErrorMessage } from "../../shared/utils/safeError.js";
+import httpError from "../../shared/utils/httpError.js";
 
-export const startVoiceSession = async (req, res) => {
+export const startVoiceSession = async (req, res, next) => {
   try {
     const userId = req?.user?.id;
     const language = req?.body?.language || "hindi";
@@ -19,24 +19,16 @@ export const startVoiceSession = async (req, res) => {
       data: session,
     });
   } catch (error) {
-    console.error("Error starting voice session:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to start voice session",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const processVoiceQuery = async (req, res) => {
+export const processVoiceQuery = async (req, res, next) => {
   try {
     const userId = req?.user?.id;
 
     if (!req?.file && !req?.body?.audioData) {
-      return res.status(400).json({
-        success: false,
-        message: "Audio file or data is required",
-      });
+      throw httpError(400, "Audio file or data is required");
     }
 
     let audioData;
@@ -44,10 +36,7 @@ export const processVoiceQuery = async (req, res) => {
     const sessionId = req?.body?.sessionId;
 
     if (!sessionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Session ID is required",
-      });
+      throw httpError(400, "Session ID is required");
     }
 
     if (req?.file) {
@@ -61,19 +50,12 @@ export const processVoiceQuery = async (req, res) => {
         `[Voice] Received base64 audio data: ${audioData.length} chars`
       );
     } else {
-      return res.status(400).json({
-        success: false,
-        message: "No audio data received",
-      });
+      throw httpError(400, "No audio data received");
     }
 
     const audioBuffer = Buffer.from(audioData, "base64");
     if (audioBuffer.length < 1000) {
-      return res.status(400).json({
-        success: false,
-        message: "Audio too short",
-        error: "Recording too short. Please speak for at least 1 second.",
-      });
+      throw httpError(400, "Recording too short. Please speak for at least 1 second.");
     }
 
     console.log(
@@ -96,26 +78,18 @@ export const processVoiceQuery = async (req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error("[Voice] Error processing voice query:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to process voice query",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const endVoiceSession = async (req, res) => {
+export const endVoiceSession = async (req, res, next) => {
   try {
     const userId = req?.user?.id;
 
     const sessionId = req?.body?.sessionId;
 
     if (!sessionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Session ID is required",
-      });
+      throw httpError(400, "Session ID is required");
     }
 
     await terminateSession(userId, sessionId);
@@ -125,16 +99,11 @@ export const endVoiceSession = async (req, res) => {
       message: "Voice session ended successfully",
     });
   } catch (error) {
-    console.error("Error ending voice session:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to end voice session",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
 
-export const getVoiceChatHistory = async (req, res) => {
+export const getVoiceChatHistory = async (req, res, next) => {
   try {
     const userId = req?.user?.id;
     const { page = 1, limit = 10 } = req?.query;
@@ -151,11 +120,6 @@ export const getVoiceChatHistory = async (req, res) => {
       data: history,
     });
   } catch (error) {
-    console.error("Error getting voice chat history:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get voice chat history",
-      error: safeErrorMessage(error),
-    });
+    next(error);
   }
 };
