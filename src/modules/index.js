@@ -7,6 +7,7 @@ import communityChatRoutes from "./communityChat/communityChat.routes.js";
 import voiceChatRoutes from "./voiceChat/voiceChat.routes.js";
 import postRoutes from "./FarmersCommunity/postRoutes.js";
 import commentRoutes from "./FarmersCommunity/commentRoutes.js";
+import schemeRoutes from "./schemes/scheme.routes.js";
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.use("/community", communityChatRoutes);
 router.use("/voice-chat", voiceChatRoutes);
 router.use("/posts", postRoutes);
 router.use("/comments", commentRoutes);
+router.use("/schemes", schemeRoutes);
 
 router.get("/health", (req, res) => {
   res.json({
