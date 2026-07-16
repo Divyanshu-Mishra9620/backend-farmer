@@ -35,6 +35,26 @@ export const login = async (req, res, next) => {
   }
 };
 
+export const googleAuth = async (req, res, next) => {
+  try {
+    const { idToken } = req.body;
+    const { accessToken, refreshToken, user } = await authService.googleAuth(idToken);
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions());
+    res.json({ accessToken, refreshToken, user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const completeProfile = async (req, res, next) => {
+  try {
+    const user = await authService.completeProfile(req.user.id, req.body);
+    res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const logout = async (req, res, next) => {
   try {
     await authService.logout(req.user.id);

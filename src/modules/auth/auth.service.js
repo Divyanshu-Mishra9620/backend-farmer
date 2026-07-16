@@ -12,6 +12,9 @@ import { sendEmail } from "../../shared/utils/email.js";
 import config from "../../config/env.js";
 import crypto from "crypto";
 import httpError from "../../shared/utils/httpError.js";
+import { OAuth2Client } from "google-auth-library";
+
+const googleClient = new OAuth2Client();
 
 export const signup = async (userData) => {
   const { name, email, password, state, district, address, dob, phone } =
@@ -72,6 +75,79 @@ export const login = async (email, password) => {
   user.resetPasswordExpires = undefined;
 
   return { user, accessToken, refreshToken };
+};
+
+export const googleAuth = async (idToken) => {
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: config.googleClientIds,
+    });
+    payload = ticket.getPayload();
+  } catch {
+    throw httpError(401, "Invalid Google credential");
+  }
+
+  if (!payload?.email_verified) {
+    throw httpError(401, "Google account email is not verified");
+  }
+
+  const { sub: googleId, email, name } = payload;
+
+  let user = await User.findOne({ googleId });
+  if (!user) {
+    // Google has already verified this email is owned by whoever is signing
+    // in, so an existing local account with the same email can be linked
+    // safely without a password check.
+    user = await User.findOne({ email });
+    if (user) {
+      user.googleId = googleId;
+    } else {
+      user = new User({
+        name,
+        email,
+        googleId,
+        authProvider: "google",
+        profileCompleted: false,
+      });
+    }
+  }
+
+  if (!user.isActive) {
+    throw httpError(403, "Your Account is Blocked. Please contact the admin");
+  }
+
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user);
+
+  user.refreshToken = refreshToken;
+  await user.save();
+
+  user.password = undefined;
+  user.refreshToken = undefined;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+
+  return { user, accessToken, refreshToken };
+};
+
+export const completeProfile = async (userId, data) => {
+  const { state, district, address, dob, phone } = data;
+
+  const user = await User.findById(userId);
+  if (!user) throw httpError(404, "User not found");
+
+  user.state = state;
+  user.district = district;
+  user.address = address;
+  user.dob = dob;
+  if (phone !== undefined) user.phone = phone;
+  user.profileCompleted = true;
+
+  await user.save();
+
+  return await User.findById(userId).select("-password -refreshToken");
 };
 
 export const refreshAccessToken = async (refreshToken) => {

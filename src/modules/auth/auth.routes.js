@@ -6,7 +6,12 @@ import {
 } from "../../shared/middlewares/authMiddleware.js";
 import { authLimiter } from "../../shared/middlewares/rateLimiter.js";
 import validateRequest from "../../shared/middlewares/validateRequest.js";
-import { createUserSchema, loginSchema } from "../user/user.validations.js";
+import {
+  createUserSchema,
+  loginSchema,
+  googleAuthSchema,
+  completeProfileSchema,
+} from "../user/user.validations.js";
 
 const router = Router();
 
@@ -41,6 +46,18 @@ const validateSignup = (req, res, next) => {
 
 router.post("/signup", validateSignup, authController.signup);
 router.post("/login", authLimiter, authController.login);
+router.post(
+  "/google",
+  authLimiter,
+  validateRequest(googleAuthSchema),
+  authController.googleAuth,
+);
+router.patch(
+  "/complete-profile",
+  authMiddleware,
+  validateRequest(completeProfileSchema),
+  authController.completeProfile,
+);
 router.post("/refresh", authController.refresh);
 router.post("/logout", authMiddleware, authController.logout);
 router.get("/profile", authMiddleware, authController.profile);

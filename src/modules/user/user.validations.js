@@ -17,6 +17,18 @@ export const loginSchema = Joi.object({
   password: Joi.string().required(),
 });
 
+export const googleAuthSchema = Joi.object({
+  idToken: Joi.string().required(),
+});
+
+export const completeProfileSchema = Joi.object({
+  state: Joi.string().required(),
+  district: Joi.string().required(),
+  address: Joi.string().min(10).max(200).required(),
+  dob: Joi.date().required(),
+  phone: Joi.string().min(10).max(15),
+});
+
 export const changePasswordSchema = Joi.object({
   oldPassword: Joi.string().required(),
   newPassword: Joi.string().min(6).max(100).required(),

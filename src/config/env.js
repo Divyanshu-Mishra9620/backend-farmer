@@ -18,6 +18,11 @@ const config = {
   emailPass: process.env.EMAIL_PASS,
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
 
+  googleClientIds: (process.env.GOOGLE_CLIENT_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+
   allowedOrigins: (
     process.env.ALLOWED_ORIGINS ||
     "https://kris-hinova.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:5174"
