@@ -8,6 +8,7 @@ import voiceChatRoutes from "./voiceChat/voiceChat.routes.js";
 import postRoutes from "./FarmersCommunity/postRoutes.js";
 import commentRoutes from "./FarmersCommunity/commentRoutes.js";
 import schemeRoutes from "./schemes/scheme.routes.js";
+import telemetryRoutes from "./telemetry/telemetry.routes.js";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.use("/voice-chat", voiceChatRoutes);
 router.use("/posts", postRoutes);
 router.use("/comments", commentRoutes);
 router.use("/schemes", schemeRoutes);
+router.use("/telemetry", telemetryRoutes);
 
 router.get("/health", (req, res) => {
   res.json({

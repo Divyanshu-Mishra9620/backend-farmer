@@ -44,6 +44,17 @@ const config = {
 
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
   weatherAlertCron: process.env.WEATHER_ALERT_CRON || "0 */3 * * *",
+
+  // Optional. Baked into every stored device key hash, so introducing or
+  // changing it invalidates all existing keys and every board has to be
+  // re-registered or rotated — see src/modules/telemetry/deviceKey.js.
+  deviceKeyPepper: process.env.DEVICE_KEY_PEPPER || "",
+  deviceOfflineAfterS: parseInt(process.env.DEVICE_OFFLINE_AFTER_S || "900", 10),
+  telemetryRetentionDays: parseInt(
+    process.env.TELEMETRY_RETENTION_DAYS || "30",
+    10
+  ),
+  telemetryMaxBatch: parseInt(process.env.TELEMETRY_MAX_BATCH || "50", 10),
 };
 
 export default config;
