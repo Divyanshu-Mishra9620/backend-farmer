@@ -139,6 +139,7 @@ const TTL = {
 const aiCache = new LRUCache({ maxSize: 200, defaultTTL: TTL.AI_RESPONSE });
 const weatherCache = new LRUCache({ maxSize: 50, defaultTTL: TTL.WEATHER });
 const geoCache = new LRUCache({ maxSize: 100, defaultTTL: TTL.GEOCODE });
+const marketCache = new LRUCache({ maxSize: 100, defaultTTL: TTL.MARKET });
 
 // Periodic cleanup every 10 minutes
 setInterval(
@@ -146,9 +147,10 @@ setInterval(
     aiCache.purgeExpired();
     weatherCache.purgeExpired();
     geoCache.purgeExpired();
+    marketCache.purgeExpired();
   },
   10 * 60 * 1000,
 );
 
-export { LRUCache, TTL, aiCache, weatherCache, geoCache };
+export { LRUCache, TTL, aiCache, weatherCache, geoCache, marketCache };
 export default LRUCache;

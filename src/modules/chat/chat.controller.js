@@ -6,6 +6,7 @@ import { createLogger } from "../../shared/utils/logger.js";
 import { aiCache } from "../../shared/utils/cache.js";
 import { geocodeAddress as geocodeAddressUtil } from "../../shared/utils/geocode.js";
 import { fetchCurrentWeather } from "../../shared/utils/weather.js";
+import { fetchMandiPrices, MarketServiceError } from "../../shared/utils/market.js";
 
 const logger = createLogger("ChatController");
 const genAI = new GoogleGenerativeAI(config.geminiApiKey);
@@ -102,31 +103,74 @@ export async function getWeather(req, res, next) {
   }
 }
 
-export async function getMarketTrends(req, res, next) {
-  try {
-    const { state, district, crop } = req.query;
+function marketFallback(state, district, message) {
+  return {
+    success: true,
+    market: district || state || "India",
+    top: [],
+    prices: {},
+    ts: new Date().toLocaleDateString("en-IN"),
+    fallback: true,
+    message,
+  };
+}
 
-    const mockTrends = {
+export async function getMarketTrends(req, res, next) {
+  const { state, district, crop } = req.query;
+
+  try {
+    const { commodityPrices, source } = await fetchMandiPrices({
+      state,
+      district,
+      commodity: crop,
+    });
+
+    if (commodityPrices.length === 0) {
+      return res.json(
+        marketFallback(
+          state,
+          district,
+          "No live mandi price data available for this location right now.",
+        ),
+      );
+    }
+
+    const sorted = [...commodityPrices].sort((a, b) =>
+      a.commodity.localeCompare(b.commodity),
+    );
+    const top = sorted.slice(0, 8).map((c) => c.commodity);
+    const prices = Object.fromEntries(
+      sorted.map((c) => [
+        c.commodity.toLowerCase(),
+        `₹${c.modalPrice.toLocaleString("en-IN")}/quintal`,
+      ]),
+    );
+
+    const trends = {
       market: district || state || "India",
-      top: ["Wheat", "Rice", "Sugarcane", "Cotton", "Maize"],
-      prices: {
-        wheat: "₹2,200/quintal",
-        rice: "₹3,500/quintal",
-        sugarcane: "₹350/quintal",
-        cotton: "₹6,800/quintal",
-        maize: "₹1,800/quintal",
-      },
-      ts: new Date().toLocaleDateString("en-IN"),
+      top,
+      prices,
+      ts: sorted[0]?.arrivalDate || new Date().toLocaleDateString("en-IN"),
+      source,
     };
 
     if (crop) {
-      mockTrends.selectedCrop = crop;
-      mockTrends.cropPrice =
-        mockTrends.prices[crop?.toLowerCase()] || "Price not available";
+      trends.selectedCrop = crop;
+      trends.cropPrice = prices[crop.toLowerCase()] || "Price not available";
     }
 
-    res.json({ success: true, ...mockTrends });
+    res.json({ success: true, ...trends });
   } catch (err) {
+    if (err instanceof MarketServiceError) {
+      logger.warn("Market data unavailable, returning fallback", err.message);
+      return res.json(
+        marketFallback(
+          state,
+          district,
+          "Live market prices are temporarily unavailable. Please try again shortly.",
+        ),
+      );
+    }
     logger.error("Market trends error", err.message);
     next(err);
   }
