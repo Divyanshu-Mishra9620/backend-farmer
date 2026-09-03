@@ -1,6 +1,7 @@
 import * as telemetryService from "./telemetry.service.js";
 import * as deviceService from "./device.service.js";
 import * as captureService from "./capture.service.js";
+import * as commandService from "./command.service.js";
 import httpError from "../../shared/utils/httpError.js";
 
 export const ingestReadings = async (req, res, next) => {
@@ -18,6 +19,14 @@ export const ingestReadings = async (req, res, next) => {
 
     const result = await telemetryService.ingestReadings(req.device, readings);
 
+    // Commands ride the ingest response for the same reason `config` does: it
+    // is the one moment the gateway is already talking to us, so there is no
+    // extra request, no poll loop and no socket on the device side. A spray
+    // therefore starts on the gateway's next report — bounded by
+    // readingIntervalS, which is exactly the latency the command TTL is sized
+    // against.
+    const commands = await commandService.claimCommandsForDevice(req.device);
+
     return res.status(201).json({
       success: true,
       data: {
@@ -26,6 +35,7 @@ export const ingestReadings = async (req, res, next) => {
         deviceId: req.device._id,
         serverTime: new Date().toISOString(),
         config: deviceService.serializeDeviceConfig(req.device),
+        commands,
       },
     });
   } catch (err) {
@@ -70,14 +80,105 @@ export const createCapture = async (req, res, next) => {
 
 export const getDeviceConfig = async (req, res, next) => {
   try {
+    // Same shape as the ingest response, commands included: a gateway that has
+    // just booted calls this before it has any readings to send, and a command
+    // queued while it was rebooting should not have to wait a full reading
+    // interval to be picked up.
+    const commands = await commandService.claimCommandsForDevice(req.device);
+
     return res.json({
       success: true,
       data: {
         deviceId: req.device._id,
         serverTime: new Date().toISOString(),
         config: deviceService.serializeDeviceConfig(req.device),
+        commands,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// --- Actuator commands ------------------------------------------------------
+
+export const acknowledgeCommand = async (req, res, next) => {
+  try {
+    const result = await commandService.acknowledgeCommand(
+      req.device,
+      req.params.id,
+      {
+        executed: req.body?.executed,
+        actualRuntimeS: req.body?.actualRuntimeS,
+        error: req.body?.error,
+      }
+    );
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const sprayNow = async (req, res, next) => {
+  try {
+    const result = await commandService.queueSprayCommand(
+      req.user.id,
+      req.params.id,
+      {
+        durationS: req.body?.durationS,
+        source: req.body?.source,
+        captureId: req.body?.captureId,
+        label: req.body?.label,
+        confidence: req.body?.confidence,
+        pestName: req.body?.pestName,
+        category: req.body?.category,
+      }
+    );
+    return res.status(202).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const stopSpray = async (req, res, next) => {
+  try {
+    const result = await commandService.queueStopCommand(req.user.id, req.params.id);
+    return res.status(202).json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getActuatorStatus = async (req, res, next) => {
+  try {
+    const data = await commandService.actuatorStatus(req.user.id, req.params.id);
+    return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listCommands = async (req, res, next) => {
+  try {
+    const result = await commandService.listCommands(req.user.id, {
+      deviceId: req.query.deviceId,
+      limit: req.query.limit,
+    });
+    return res.json({
+      success: true,
+      data: result.commands,
+      count: result.commands.length,
+      limit: result.limit,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const cancelCommand = async (req, res, next) => {
+  try {
+    const result = await commandService.cancelCommand(req.user.id, req.params.id);
+    return res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

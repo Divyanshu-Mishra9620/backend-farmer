@@ -16,7 +16,7 @@ const initializeLLMs = () => {
   if (!groq && config.groqApiKey) {
     groq = new ChatGroq({
       apiKey: config.groqApiKey,
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
     });
   }
 

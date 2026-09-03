@@ -268,6 +268,92 @@ const updateDeviceValidation = {
     isInt: { options: { min: 0, max: 20000 } },
     toInt: true,
   },
+  // Enabling the sprinkler is a PATCH on the device rather than part of
+  // registration on purpose: it asserts that a relay is physically wired to
+  // this board, which is not something a registration form can know.
+  "actuators.sprinklerEnabled": {
+    in: ["body"],
+    optional: true,
+    isBoolean: true,
+    toBoolean: true,
+  },
+  "actuators.maxRuntimeS": {
+    in: ["body"],
+    optional: true,
+    isInt: { options: { min: 1, max: 3600 } },
+    toInt: true,
+  },
+  "actuators.cooldownS": {
+    in: ["body"],
+    optional: true,
+    isInt: { options: { min: 0, max: 86400 } },
+    toInt: true,
+  },
+  "actuators.dailyBudgetS": {
+    in: ["body"],
+    optional: true,
+    isInt: { options: { min: 0, max: 86400 } },
+    toInt: true,
+  },
+};
+
+const sprayValidation = {
+  id: { in: ["params"], isMongoId: true, errorMessage: "Invalid device id" },
+  // Optional: absent means "the maximum this device allows". Clamped rather
+  // than rejected when it exceeds the cap — see command.service.js.
+  durationS: {
+    in: ["body"],
+    optional: true,
+    isInt: { options: { min: 1, max: 3600 } },
+    toInt: true,
+  },
+  source: {
+    in: ["body"],
+    optional: true,
+    isIn: { options: [["pest_detection", "manual"]] },
+  },
+  captureId: { in: ["body"], optional: true, isMongoId: true },
+  label: { in: ["body"], optional: true, isString: true, trim: true },
+  confidence: {
+    in: ["body"],
+    optional: true,
+    isFloat: { options: { min: 0, max: 100 } },
+    toFloat: true,
+  },
+  pestName: { in: ["body"], optional: true, isString: true, trim: true },
+  category: { in: ["body"], optional: true, isString: true, trim: true },
+};
+
+const commandAckValidation = {
+  id: { in: ["params"], isMongoId: true, errorMessage: "Invalid command id" },
+  executed: { in: ["body"], optional: true, isBoolean: true, toBoolean: true },
+  actualRuntimeS: {
+    in: ["body"],
+    optional: true,
+    isInt: { options: { min: 0, max: 86400 } },
+    toInt: true,
+  },
+  error: {
+    in: ["body"],
+    optional: true,
+    isString: true,
+    isLength: { options: { max: 300 } },
+    trim: true,
+  },
+};
+
+const listCommandsValidation = {
+  deviceId: { in: ["query"], optional: true, isMongoId: true },
+  limit: {
+    in: ["query"],
+    optional: true,
+    isInt: { options: { min: 1, max: 200 } },
+    toInt: true,
+  },
+};
+
+const commandIdValidation = {
+  id: { in: ["params"], isMongoId: true, errorMessage: "Invalid command id" },
 };
 
 const deviceIdValidation = {
@@ -340,6 +426,18 @@ router.post(
 
 router.get("/config", deviceAuth, deviceLimiter, telemetryController.getDeviceConfig);
 
+// The gateway reporting what the relay actually did. Device-authenticated, and
+// the command is matched on {id, device} in the service so one device's key can
+// never close out another device's command.
+router.post(
+  "/commands/:id/ack",
+  deviceAuth,
+  deviceLimiter,
+  checkSchema(commandAckValidation),
+  validate,
+  telemetryController.acknowledgeCommand
+);
+
 // User-facing (Bearer JWT).
 router.post(
   "/devices",
@@ -394,5 +492,46 @@ router.get(
   telemetryController.listCaptures
 );
 router.get("/summary", authMiddleware, telemetryController.getSummary);
+
+// --- Actuator control (Bearer JWT) -----------------------------------------
+// Nothing here actuates anything directly: each of these queues a command that
+// the gateway collects on its next report. The farmer pressing "Spray" is the
+// required human step between a pest detection and water leaving a nozzle —
+// the RAG pipeline only ever recommends.
+router.post(
+  "/devices/:id/spray",
+  authMiddleware,
+  checkSchema(sprayValidation),
+  validate,
+  telemetryController.sprayNow
+);
+router.post(
+  "/devices/:id/spray/stop",
+  authMiddleware,
+  checkSchema(deviceIdValidation),
+  validate,
+  telemetryController.stopSpray
+);
+router.get(
+  "/devices/:id/actuator",
+  authMiddleware,
+  checkSchema(deviceIdValidation),
+  validate,
+  telemetryController.getActuatorStatus
+);
+router.get(
+  "/commands",
+  authMiddleware,
+  checkSchema(listCommandsValidation),
+  validate,
+  telemetryController.listCommands
+);
+router.post(
+  "/commands/:id/cancel",
+  authMiddleware,
+  checkSchema(commandIdValidation),
+  validate,
+  telemetryController.cancelCommand
+);
 
 export default router;

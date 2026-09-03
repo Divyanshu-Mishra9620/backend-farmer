@@ -32,6 +32,24 @@ const thresholdsSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Per-device actuator wiring and limits. `enabled` defaults to FALSE: a device
+// only accepts spray commands once someone has explicitly said a relay is
+// physically wired to it. Registering a gateway must never make it capable of
+// opening a valve by default.
+//
+// The three limits shadow the config.actuator* env defaults so one plot with a
+// small drip line can be capped tighter than the site-wide default without
+// changing the deployment. Null means "use the env default".
+const actuatorConfigSchema = new mongoose.Schema(
+  {
+    sprinklerEnabled: { type: Boolean, default: false },
+    maxRuntimeS: { type: Number, min: 1, max: 3600, default: null },
+    cooldownS: { type: Number, min: 0, default: null },
+    dailyBudgetS: { type: Number, min: 0, default: null },
+  },
+  { _id: false }
+);
+
 const deviceSchema = new mongoose.Schema(
   {
     owner: {
@@ -72,6 +90,7 @@ const deviceSchema = new mongoose.Schema(
     firmwareVersion: { type: String, trim: true },
     config: { type: deviceConfigSchema, default: () => ({}) },
     thresholds: { type: thresholdsSchema, default: () => ({}) },
+    actuators: { type: actuatorConfigSchema, default: () => ({}) },
   },
   { timestamps: true }
 );

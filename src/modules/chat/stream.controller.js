@@ -99,7 +99,7 @@ export async function streamSuggestion(req, res, _next) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
+            model: "openai/gpt-oss-120b",
             messages: [{ role: "user", content: enhancedPrompt }],
             stream: true,
             max_tokens: 600,
@@ -108,18 +108,11 @@ export async function streamSuggestion(req, res, _next) {
           signal: controller.signal,
         },
       );
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        logger.error("Groq API error", {
-          status: response.status,
-          body: errorBody.substring(0, 200),
-        });
-        throw new Error(`Groq API error: ${response.status}`);
-      }
-
-      logger.info("Groq API call successful, streaming response");
     } catch (fetchErr) {
+      // Only real network-level failures (DNS, TCP, TLS) and the abort timer
+      // land here — an HTTP error response from Groq does not throw from
+      // fetch() and is handled separately below with its actual status, not
+      // mislabeled as a connection failure.
       clearTimeout(timeoutId);
       logger.error("Fetch error", fetchErr.message);
       res.write(
@@ -139,12 +132,21 @@ export async function streamSuggestion(req, res, _next) {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      logger.error("API error", {
+      logger.error("Groq API error", {
         status: response.status,
         body: errorBody.substring(0, 200),
       });
-      throw new Error(`API error: ${response.status}`);
+      res.write(
+        `data: ${JSON.stringify({
+          error: true,
+          message: `AI service returned an error (status ${response.status}). Please try again shortly.`,
+        })}\n\n`,
+      );
+      res.end();
+      return;
     }
+
+    logger.info("Groq API call successful, streaming response");
 
     let buffer = "";
     let fullResponse = "";
@@ -255,7 +257,7 @@ export async function getSuggestion(req, res, next) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "mixtral-8x7b-32768",
+          model: "openai/gpt-oss-120b",
           messages: [{ role: "user", content: enhancedPrompt }],
           max_tokens: 600,
           temperature: 0.7,

@@ -37,6 +37,7 @@ export const serializeDevice = (device) => ({
   firmwareVersion: device.firmwareVersion,
   config: device.config,
   thresholds: device.thresholds,
+  actuators: device.actuators,
   createdAt: device.createdAt,
   updatedAt: device.updatedAt,
 });
@@ -132,6 +133,12 @@ export const updateDevice = async (ownerId, deviceId, payload) => {
     "heatStressC",
     "frostRiskC",
     "batteryLowMv",
+  ]);
+  applyNested(update, "actuators", payload.actuators, [
+    "sprinklerEnabled",
+    "maxRuntimeS",
+    "cooldownS",
+    "dailyBudgetS",
   ]);
 
   if (Object.keys(update).length === 0) {
