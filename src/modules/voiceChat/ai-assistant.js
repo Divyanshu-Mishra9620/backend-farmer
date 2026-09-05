@@ -39,9 +39,13 @@ Please provide practical suggestions in simple and clear English. Keep responses
         { role: "system", content: systemPrompt },
         { role: "user", content: userQuery },
       ],
-      model: "llama-3.1-8b-instant",
+      model: "openai/gpt-oss-120b",
       temperature: 0.7,
-      max_tokens: 200,
+      // This is a "thinking" model whose hidden reasoning tokens also count
+      // against max_tokens — budget extra room, and hide the reasoning so it
+      // never leaks into the farmer-facing (and TTS-spoken) response.
+      max_tokens: 350,
+      reasoning_format: "hidden",
       top_p: 1,
       stream: false,
     });
