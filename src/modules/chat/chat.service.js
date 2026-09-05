@@ -180,7 +180,7 @@ function generateFallbackResponse(
   const lastMessage = messages[messages.length - 1];
   const query = lastMessage?.content?.toLowerCase() || "";
 
-  let response = "🌾 I'm your farming assistant! ";
+  let response = "I’m your farming assistant. ";
 
   if (userPreferences) {
     if (userPreferences.primaryCrops?.length > 0) {
@@ -202,7 +202,7 @@ function generateFallbackResponse(
 
   if (context.weather) {
     const temp = Math.round(context.weather.temp);
-    response += `with current temperature ${temp}°C and ${context.weather.humidity}% humidity, `;
+    response += `Current weather is ${temp}°C with ${context.weather.humidity}% humidity. `;
   }
 
   const currentMonth = new Date().getMonth() + 1;
@@ -219,41 +219,35 @@ function generateFallbackResponse(
     query.includes("insect") ||
     query.includes("bug")
   ) {
+    response += "For pest management, use integrated pest management: ";
     response +=
-      "for pest management, I recommend integrated pest management (IPM): ";
-    response +=
-      "1) Regular crop inspection 2) Use neem oil spray 3) Introduce beneficial insects 4) Maintain crop rotation. ";
+      "inspect crops regularly, use neem-based sprays when suitable, encourage beneficial insects, and rotate crops. ";
 
     if (userPreferences?.farmingType === "organic") {
-      response +=
-        "Since you prefer organic farming, focus on neem-based solutions and companion planting.";
+      response += "For organic farming, focus on neem-based solutions and companion planting. ";
     }
   } else if (query.includes("market") || query.includes("price")) {
-    response += "for current market information: ";
-    response +=
-      "1) Check local mandi prices 2) Consider direct selling 3) Join farmer producer organizations 4) Time your harvest strategically.";
+    response += "For market information, check local mandi prices, compare nearby buyers, and time harvests carefully. ";
 
     if (context.market) {
-      response += ` Current top crops in your area: ${context.market.top?.join(", ") || "wheat, rice, pulses"}.`;
+      response += `Top crops in your area are ${context.market.top?.join(", ") || "wheat, rice, and pulses"}. `;
     }
   } else {
     response +=
-      "I can help with crop selection, pest management, disease control, fertilization, irrigation, and marketing. ";
-    response += "What specific farming challenge are you facing?";
+      "I can help with crop selection, pest control, disease symptoms, fertilization, irrigation, and marketing. What specific farming challenge are you facing? ";
   }
 
   if (context.weather) {
     const weatherAdvice = getWeatherBasedAdvice(context.weather);
     if (weatherAdvice) {
-      response += "\n\n" + weatherAdvice;
+      response += ` ${weatherAdvice}`;
     }
   }
 
-  response +=
-    "\n\n💡 Feel free to ask more specific questions about your farming needs!";
+  response += " Feel free to ask a more specific question if you want tailored advice.";
 
   if (error && process.env.NODE_ENV === "development") {
-    response += `\n\n🔧 (System note: ${error.message})`;
+    response += ` (System note: ${error.message})`;
   }
 
   return {

@@ -27,6 +27,10 @@ Instructions:
 • Include specific steps or recommendations
 • Mention any critical warnings briefly
 • If relevant, add local Indian farming practices
+• Return plain text only
+• Do not use markdown tables, large headings, nested lists, or decorative formatting
+• Prefer a clean paragraph style; use a short bullet list only if it makes the answer clearer
+• Avoid sounding like a generated report or template
 
 Keep it SHORT, CLEAR, and ACTIONABLE.`;
 }

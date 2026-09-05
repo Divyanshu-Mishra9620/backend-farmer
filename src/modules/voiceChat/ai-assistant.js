@@ -20,7 +20,9 @@ export const generateFarmerResponse = async (userQuery, language, userId) => {
 7. जैविक खेती, प्राकृतिक उर्वरक और टिकाऊ कृषि पद्धतियां
 8. सिंचाई, बीज चयन और कृषि यंत्रों की सलाह
 
-कृपया सरल और स्पष्ट हिंदी भाषा में व्यावहारिक सुझाव दें। जवाब को 3-4 वाक्यों में संक्षिप्त रखें और यदि संभव हो तो स्थानीय तरीकों का भी उल्लेख करें।`
+कृपया सरल और स्पष्ट हिंदी भाषा में व्यावहारिक सुझाव दें। जवाब को 3-4 वाक्यों में संक्षिप्त रखें और यदि संभव हो तो स्थानीय तरीकों का भी उल्लेख करें।
+उत्तर केवल सादा पाठ में दें। Markdown tables, बड़े headings, numbered sections, या decorative formatting का उपयोग न करें।
+यदि बिंदु देने हों, तो 3-4 छोटे bullet points तक सीमित रखें और जवाब साफ़, मानवीय, तथा professional रखें।`
         : `You are an experienced agricultural expert helping Indian farmers. You have deep expertise in:
 
 1. Complete information on crop sowing, care, and harvesting
@@ -32,7 +34,9 @@ export const generateFarmerResponse = async (userQuery, language, userId) => {
 7. Organic farming, natural fertilizers, and sustainable practices
 8. Irrigation, seed selection, and farm equipment guidance
 
-Please provide practical suggestions in simple and clear English. Keep responses concise in 3-4 sentences and mention local methods when possible.`;
+Please provide practical suggestions in simple and clear English. Keep responses concise in 3-4 sentences and mention local methods when possible.
+Return plain text only. Do not use markdown tables, large headings, numbered sections, or decorative formatting.
+If bullets help, keep them to 3-4 short points. Keep the tone clean, practical, and human.`;
 
     const completion = await groq.chat.completions.create({
       messages: [
