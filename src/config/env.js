@@ -32,6 +32,7 @@ const config = {
   groqApiKey: process.env.GROQ_API_KEY,
   marketApiUrl: process.env.MARKET_API_URL,
   marketApiKey: process.env.MARKET_API_KEY,
+  ragApiUrl: process.env.RAG_API_URL,
   geminiApiKey: process.env.GEMINI_API_KEY,
   openrouterApiKey: process.env.OPENROUTER_API_KEY,
   langgraphApiKey: process.env.LANGGRAPH_API_KEY,
@@ -55,6 +56,22 @@ const config = {
     10,
   ),
   telemetryMaxBatch: parseInt(process.env.TELEMETRY_MAX_BATCH || "50", 10),
+
+  // How long to wait before re-pushing the same (device, alert kind) — a soil
+  // reading below threshold fires on every ~5min ingest cycle it persists
+  // through, and without this a farmer would get a push every 5 minutes for
+  // as long as the field stays dry. 4h is short enough that a genuinely new
+  // night's frost risk still gets its own notification, long enough that one
+  // persistent condition doesn't spam.
+  telemetryAlertPushCooldownS: parseInt(
+    process.env.TELEMETRY_ALERT_PUSH_COOLDOWN_S || "14400",
+    10,
+  ),
+  // How often to sweep for devices that have gone silent. Independent of
+  // deviceOfflineAfterS (the staleness threshold itself) — this is just the
+  // polling cadence, since nothing pushes an event when a device stops
+  // reporting the way a new reading does when one arrives.
+  deviceOfflineCheckCron: process.env.DEVICE_OFFLINE_CHECK_CRON || "*/5 * * * *",
 
   // --- Actuator (sprinkler) command queue ---------------------------------
   // A queued command that no gateway has collected within this window is

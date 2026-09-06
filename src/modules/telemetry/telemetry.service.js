@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 import TelemetryReading from "./telemetry.model.js";
 import Device from "./device.model.js";
+import User from "../user/user.model.js";
 import { isDeviceOnline, serializeDevice } from "./device.service.js";
 import { emitToUser } from "../chat/socket.js";
+import { sendPushToUser } from "../../shared/utils/pushSender.js";
 import config from "../../config/env.js";
 import { createLogger } from "../../shared/utils/logger.js";
 
@@ -184,6 +186,54 @@ export const evaluateAlerts = (device, reading) => {
   return alerts;
 };
 
+// Every alert above only ever reaches the farmer live, over a socket, to a
+// browser tab that happens to be open on the Field Devices page right now —
+// frost risk overnight or a dead battery gets no notification at all
+// otherwise. This pushes the same alert through Expo, the same mechanism
+// weatherAlertJob.js already uses for weather alerts, gated by a per-device,
+// per-kind cooldown so a persistently dry soil reading doesn't push on every
+// ~5min ingest cycle it survives.
+//
+// Fire-and-forget from the caller's point of view — sendPushToUser is
+// documented as not-for-hot-paths, and ingestReadings is answering the
+// gateway's HTTP request, not the farmer's. Exported so jobs/deviceOfflineJob.js
+// can reuse the exact same cooldown-claim logic for the one alert kind that
+// can't originate from an ingest (device_offline is a statement about silence,
+// not about a reading — see evaluateAlerts's own comment).
+export async function pushDeviceAlertIfDue(device, alert) {
+  try {
+    const cooldownField = `lastAlertPushedAt.${alert.kind}`;
+    const cutoff = new Date(Date.now() - config.telemetryAlertPushCooldownS * 1000);
+
+    // Atomic claim: only succeeds if this (device, kind) hasn't pushed within
+    // the cooldown window, so two near-simultaneous ingests for the same
+    // device can't both send a push for the same breach.
+    const claimed = await Device.findOneAndUpdate(
+      {
+        _id: device._id,
+        $or: [
+          { [cooldownField]: { $exists: false } },
+          { [cooldownField]: null },
+          { [cooldownField]: { $lte: cutoff } },
+        ],
+      },
+      { $set: { [cooldownField]: new Date() } },
+    );
+    if (!claimed) return;
+
+    const user = await User.findById(device.owner).select("pushToken");
+    if (!user?.pushToken) return;
+
+    await sendPushToUser(user.pushToken, {
+      title: alert.level === "critical" ? "Critical field alert" : "Field alert",
+      body: alert.message,
+      data: { url: "krishiapp://field-devices", deviceId: String(device._id) },
+    });
+  } catch (err) {
+    logger.error(`Alert push failed for device ${device._id}`, err.message);
+  }
+}
+
 export const ingestReadings = async (device, readings) => {
   const now = new Date();
   const incoming = Array.isArray(readings) ? readings : [];
@@ -289,6 +339,10 @@ export const ingestReadings = async (device, readings) => {
   // that describes the field as it is right now.
   for (const alert of evaluateAlerts(device, newest)) {
     emitToUser(ownerRoom, "telemetry_alert", alert);
+    // Detached on purpose — see pushDeviceAlertIfDue's own comment. It already
+    // catches internally, but ingestReadings must not wait on an Expo call
+    // before answering the gateway either way.
+    pushDeviceAlertIfDue(device, alert);
   }
 
   return { accepted: inserted.length, rejected };

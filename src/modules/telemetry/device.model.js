@@ -50,6 +50,22 @@ const actuatorConfigSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// When a push notification last went out for each reading-derived alert kind
+// on this device — the cooldown telemetry.service.js checks before sending
+// another, so a persistently dry soil reading doesn't push every ~5min
+// ingest cycle for as long as it stays below threshold.
+const alertPushSchema = new mongoose.Schema(
+  {
+    soil_dry: Date,
+    soil_saturated: Date,
+    heat_stress: Date,
+    frost_risk: Date,
+    battery_low: Date,
+    device_offline: Date,
+  },
+  { _id: false }
+);
+
 const deviceSchema = new mongoose.Schema(
   {
     owner: {
@@ -91,6 +107,7 @@ const deviceSchema = new mongoose.Schema(
     config: { type: deviceConfigSchema, default: () => ({}) },
     thresholds: { type: thresholdsSchema, default: () => ({}) },
     actuators: { type: actuatorConfigSchema, default: () => ({}) },
+    lastAlertPushedAt: { type: alertPushSchema, default: () => ({}) },
   },
   { timestamps: true }
 );

@@ -85,6 +85,12 @@ async function markAnalyzed(capture, ownerRoom, analysis) {
     status: capture.status,
     detection: analysis.detection || null,
     confidence: analysis.confidencePercentage ?? null,
+    // The farmer-facing mitigation text (grounded in a knowledge-base
+    // document, or an honest healthy/unavailable message) and the
+    // advisory-only sprinkler recommendation — both used to be computed and
+    // then dropped before reaching this event.
+    mitigation: analysis.mitigation ?? null,
+    action: analysis.action ?? null,
     imageUrl: analysis.imageUrl,
     at: new Date(),
   });
@@ -218,7 +224,7 @@ export const listCaptures = async (ownerId, options = {}) => {
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
-      .populate("analysis", "status detection recommendations createdAt"),
+      .populate("analysis", "status detection mitigation action recommendations createdAt"),
     DeviceCapture.countDocuments(query),
   ]);
 
@@ -233,6 +239,8 @@ export const listCaptures = async (ownerId, options = {}) => {
             id: capture.analysis._id,
             status: capture.analysis.status,
             detection: capture.analysis.detection,
+            mitigation: capture.analysis.mitigation,
+            action: capture.analysis.action,
             recommendations: capture.analysis.recommendations,
             createdAt: capture.analysis.createdAt,
           }

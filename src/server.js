@@ -3,6 +3,7 @@ import config from "./config/env.js";
 import initApp from "./loaders/index.js";
 import { initSocket } from "./modules/chat/socket.js";
 import { startWeatherAlertJob } from "./jobs/weatherAlertJob.js";
+import { startDeviceOfflineJob } from "./jobs/deviceOfflineJob.js";
 
 (async () => {
   const app = await initApp();
@@ -20,6 +21,7 @@ import { startWeatherAlertJob } from "./jobs/weatherAlertJob.js";
 
     if (config.nodeEnv !== "test") {
       startWeatherAlertJob();
+      startDeviceOfflineJob();
     }
   });
 

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import Analysis from "./analysis.mode.js";
-import { executeAnalysisPipeline } from "./langraph.pipeline.js";
+import { diagnoseDisease, RagDiagnosisError } from "./rag-diagnosis.client.js";
 import { uploadToCloudinary } from "../../shared/utils/cloudinary.js";
 import config from "../../config/env.js";
 import httpError from "../../shared/utils/httpError.js";
@@ -40,34 +40,20 @@ export const analyzeImage = async ({
       ],
     });
 
-    let imageUrl = imageUrlFallback;
     if (
       config.cloudinaryApiKey &&
       config.cloudinaryApiSecret &&
       config.cloudinaryCloudName
     ) {
       try {
-        imageUrl = await uploadToCloudinary(filePath, {
+        analysis.imageUrl = await uploadToCloudinary(filePath, {
           folder: "disease-analysis",
           transformation: [
             { width: 1000, height: 1000, crop: "limit" },
             { quality: "auto" },
           ],
         });
-
-        analysis.imageUrl = imageUrl;
         await analysis.save();
-
-        if (fs.existsSync(filePath)) {
-          try {
-            fs.unlinkSync(filePath);
-          } catch (cleanupError) {
-            console.error(
-              "Failed to clean up local file after Cloudinary upload:",
-              cleanupError
-            );
-          }
-        }
       } catch (uploadError) {
         console.error(
           "Cloudinary upload failed, using local URL:",
@@ -76,23 +62,48 @@ export const analyzeImage = async ({
       }
     }
 
-    const pipelineData = {
-      analysisId: analysis._id.toString(),
-      imageUrl,
-      cropType: crop,
-      location,
-      provider,
+    // The local file has to survive until here — diagnoseDisease needs the
+    // actual bytes (multipart upload to the RAG service), not a URL.
+    analysis.status = "processing";
+    await analysis.save();
+
+    const result = await diagnoseDisease({ filePath, userId });
+
+    analysis.detection = {
+      disease: result.prediction.disease,
+      diseaseTitle: result.prediction.disease_title,
+      confidence: result.prediction.confidence,
+      status: result.status,
+      source: result.source
+        ? {
+            title: result.source.title,
+            sourceFile: result.source.source_file,
+            scientificName: result.source.scientific_name,
+          }
+        : undefined,
     };
+    analysis.mitigation = result.mitigation || result.message || null;
+    analysis.action = result.action || null;
+    analysis.status = "completed";
+    analysis.processingSteps.push({
+      step: "diagnosis",
+      status: "completed",
+      result: {
+        status: result.status,
+        inferenceTimeMs: result.prediction.inference_time_ms,
+      },
+    });
+    await analysis.save();
 
-    console.log("Starting LangGraph pipeline...");
-    const pipelineResult = await executeAnalysisPipeline(pipelineData);
-
-    const updatedAnalysis = await Analysis.findById(analysis._id);
-
-    if (!updatedAnalysis) {
-      throw new Error("Analysis record not found after pipeline execution");
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (cleanupError) {
+        console.error("Failed to clean up local file after diagnosis:", cleanupError);
+      }
     }
-    return updatedAnalysis;
+
+    return analysis;
   } catch (error) {
     console.error("Image analysis failed:", error);
 
@@ -206,19 +217,48 @@ export const retryFailedAnalysis = async (analysisId, userId = null) => {
   });
   await analysis.save();
 
-  const pipelineData = {
-    analysisId: analysis._id.toString(),
-    imageUrl: analysis.imageUrl,
-    cropType: analysis.crop,
-    location: analysis.location,
-    provider: analysis.aiProvider,
-  };
-
   try {
-    await executeAnalysisPipeline(pipelineData);
-    return await Analysis.findById(analysisId);
+    analysis.status = "processing";
+    await analysis.save();
+
+    const result = await diagnoseDisease({
+      imageUrl: analysis.imageUrl,
+      userId: analysis.user,
+    });
+
+    analysis.detection = {
+      disease: result.prediction.disease,
+      diseaseTitle: result.prediction.disease_title,
+      confidence: result.prediction.confidence,
+      status: result.status,
+      source: result.source
+        ? {
+            title: result.source.title,
+            sourceFile: result.source.source_file,
+            scientificName: result.source.scientific_name,
+          }
+        : undefined,
+    };
+    analysis.mitigation = result.mitigation || result.message || null;
+    analysis.action = result.action || null;
+    analysis.status = "completed";
+    analysis.error = null;
+    analysis.processingSteps.push({
+      step: "diagnosis",
+      status: "completed",
+      result: {
+        status: result.status,
+        inferenceTimeMs: result.prediction.inference_time_ms,
+      },
+    });
+    await analysis.save();
+
+    return analysis;
   } catch (error) {
     console.error("Retry failed:", error);
+    analysis.status = "failed";
+    analysis.error = error.message || String(error);
+    await analysis.save();
     throw error;
   }
 };
