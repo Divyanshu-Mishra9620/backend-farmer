@@ -103,6 +103,23 @@ function safeExtractContext(context) {
   };
 }
 
+function sanitizeResponseText(text) {
+  if (!text || typeof text !== "string") return text;
+
+  return text
+    .replace(/^\s*#{1,6}\s+/gm, "")
+    .replace(/^\s*[-*_]{3,}\s*$/gm, "")
+    .replace(/^\s*\|.*\|\s*$/gm, "")
+    .replace(/^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/^\s*(?:\d+[.)]|[•*-])\s+/gm, "- ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+$/gm, "")
+    .trim();
+}
+
 async function analyzeContext(state) {
   const { context = {}, messages = [] } = state;
   const lastMessage =
@@ -219,6 +236,10 @@ Guidelines:
 4. Include timing recommendations when relevant
 5. Mention cost-effective solutions
 6. Use simple, clear language
+7. Return a clean answer in plain text only
+8. Do not use markdown tables, oversized headings, code blocks, or decorative formatting
+9. Use short paragraphs or a short bullet list only when it improves clarity
+10. Keep the answer concise and human, not like a report template
 
 Respond in a conversational, helpful manner. Keep your response comprehensive but easy to understand.
   `;
@@ -294,15 +315,15 @@ async function formatResponse(state) {
 
   let finalResponse = mainRecommendation;
   if (additionalTips.length > 0) {
-    finalResponse += "\n\n**Additional Tips:**\n" + additionalTips.join("\n");
+    finalResponse += "\n\nAdditional tips:\n" + additionalTips.join("\n");
   }
   finalResponse +=
-    "\n\n💡 **Need more help?** Feel free to ask about specific crops, pest problems, soil issues, or market prices!";
+    "\n\nNeed more help? Feel free to ask about specific crops, pest problems, soil issues, or market prices!";
 
   return {
     ...state,
     currentStep: "complete",
-    finalResponse,
+    finalResponse: sanitizeResponseText(finalResponse),
   };
 }
 
@@ -422,8 +443,10 @@ export async function executeFarmerAssistantPipeline(messages, context = {}) {
         {
           role: "assistant",
           content:
-            result.finalResponse ||
-            "I'm here to help with your farming questions!",
+            sanitizeResponseText(
+              result.finalResponse ||
+                "I'm here to help with your farming questions!",
+            ),
         },
       ],
       analysis: result.analysis || {},
@@ -438,7 +461,9 @@ export async function executeFarmerAssistantPipeline(messages, context = {}) {
     logger.error("LangGraph pipeline error", error.message);
 
     const safeContext = safeExtractContext(context);
-    const fallbackResponse = generateFallbackResponse(lastMsg, safeContext);
+    const fallbackResponse = sanitizeResponseText(
+      generateFallbackResponse(lastMsg, safeContext),
+    );
 
     return {
       replies: [{ role: "assistant", content: fallbackResponse }],
