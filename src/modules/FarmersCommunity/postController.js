@@ -2,6 +2,7 @@ import { Post } from "./PostModel.js";
 import { Comment } from "./CommentModel.js";
 import mongoose from "mongoose";
 import httpError from "../../shared/utils/httpError.js";
+import { resolveUploadedImageUrl } from "../../shared/utils/imageUrl.js";
 
 export const createPost = async (req, res, next) => {
   try {
@@ -12,10 +13,10 @@ export const createPost = async (req, res, next) => {
       throw httpError(400, "Title and content are required");
     }
 
-    let imageUrl = null;
-    if (req.file) {
-      imageUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    }
+    const imageUrl = await resolveUploadedImageUrl(
+      req.file,
+      "community-posts",
+    );
 
     const newPost = new Post({
       author: authorId,

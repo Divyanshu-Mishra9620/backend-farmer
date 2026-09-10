@@ -1,5 +1,6 @@
 import * as communityService from "./communityChat.service.js";
 import httpError from "../../shared/utils/httpError.js";
+import { resolveUploadedImageUrl } from "../../shared/utils/imageUrl.js";
 
 export const getChannels = async (req, res, next) => {
   try {
@@ -185,7 +186,7 @@ export const uploadAttachment = async (req, res, next) => {
       throw httpError(400, "No file uploaded");
     }
 
-    const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    const url = await resolveUploadedImageUrl(req.file, "community-chat");
 
     res.json({
       success: true,
