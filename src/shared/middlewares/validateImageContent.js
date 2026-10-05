@@ -8,13 +8,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/gif",
 ]);
 
-/**
- * multer's fileFilter only sees the client-supplied MIME type header, which
- * is trivially spoofable (any file can be labeled image/png). Run this after
- * the upload middleware so req.file is already on disk, and sniff the actual
- * magic bytes before the file reaches disk storage long-term or an AI vision
- * provider.
- */
 export async function validateImageContent(req, res, next) {
   const file = req.file;
   if (!file) return next();

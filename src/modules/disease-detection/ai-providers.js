@@ -29,9 +29,6 @@ export class GroqProvider {
             ],
           },
         ],
-        // A "thinking" model: hide its reasoning so stray <think> text can't
-        // leak into the JSON this is parsed as, and reasoning tokens also
-        // count against max_tokens so budget extra room.
         max_tokens: 2500,
         reasoning_format: "hidden",
         temperature: 0.1,

@@ -31,10 +31,8 @@ router.post(
   getSuggestion,
 );
 
-// Chat suggest (LangGraph pipeline)
 router.post("/suggest", authMiddleware, aiLimiter, chatSuggest);
 
-// Utility endpoints
 router.post("/geo/geocode", authMiddleware, aiLimiter, geocodeAddress);
 router.get("/weather/current", authMiddleware, aiLimiter, getWeather);
 router.get("/market/trends", authMiddleware, aiLimiter, getMarketTrends);

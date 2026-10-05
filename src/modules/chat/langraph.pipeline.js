@@ -32,7 +32,6 @@ const initializeLLMs = () => {
   }
 };
 
-// Initialize on first use
 initializeLLMs();
 
 const AgentState = {
@@ -410,7 +409,6 @@ function createFarmerAssistantWorkflow() {
 export async function executeFarmerAssistantPipeline(messages, context = {}) {
   const startTime = Date.now();
 
-  // Check cache first
   const lastMsg =
     Array.isArray(messages) && messages.length > 0
       ? messages[messages.length - 1]?.content || ""
@@ -453,7 +451,6 @@ export async function executeFarmerAssistantPipeline(messages, context = {}) {
       context: result.context || {},
     };
 
-    // Cache the response
     aiCache.set(cacheKey, response);
 
     return response;

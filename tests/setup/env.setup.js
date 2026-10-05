@@ -4,10 +4,6 @@ dotenv.config();
 
 process.env.NODE_ENV = "test";
 
-// Redirect DATABASE_URL to a dedicated database on the same Atlas cluster so
-// integration tests never read or write the same database as local dev or
-// real farmer data. dotenv.config() calls made later by app code are no-ops
-// once DATABASE_URL is already set, so this override sticks.
 function withTestDb(uri) {
   const [base, query] = uri.split("?");
   const protoEnd = base.indexOf("://") + 3;

@@ -31,18 +31,6 @@ function uniqueNodeLabel(prefix = "a") {
     .slice(2, 4)}`.slice(0, 15);
 }
 
-/**
- * Create a commissioned gateway directly through the model rather than over
- * HTTP.
- *
- * Registering + commissioning each device through the API costs two requests,
- * and this suite needs a fresh device per test to keep cooldown and daily-budget
- * state from leaking between cases. At ~25 tests that is 50 requests spent on
- * setup alone, which blows the IP-keyed generalLimiter (100 per 15 min) and
- * turns unrelated assertions into 429s. Device registration has its own
- * coverage in telemetry.test.js; what is under test here is the command queue,
- * so the setup path is taken out of the HTTP budget entirely.
- */
 async function makeGateway({ sprinklerEnabled = true, owner, ...overrides } = {}) {
   const { key, keyHash, keyPrefix } = generateDeviceKey();
   const device = await Device.create({
@@ -99,9 +87,6 @@ describe("commissioning", () => {
   });
 
   it("a device registered through the API has no sprinkler until it is commissioned", async () => {
-    // Goes through the real registration path on purpose: the default that
-    // matters is the schema's, and asserting it against a hand-built document
-    // would only be testing the test factory.
     const reg = await request(app)
       .post("/api/telemetry/devices")
       .set("Authorization", `Bearer ${tokenA}`)
@@ -128,7 +113,6 @@ describe("ownership isolation", () => {
   it("another user cannot spray a device they do not own", async () => {
     const { id } = await makeGateway();
     const res = await spray(tokenB, id, { durationS: 10 });
-    // 404 rather than 403 — a 403 would confirm the device id is real.
     expect(res.status).toBe(404);
   });
 
@@ -175,7 +159,6 @@ describe("runtime limits", () => {
     await Device.updateOne({ _id: id }, { $set: { "actuators.cooldownS": 900 } });
 
     const first = await spray(tokenA, id, { durationS: 10 });
-    // Simulate the gateway having run and acked it a minute ago.
     await ActuatorCommand.updateOne(
       { _id: first.body.data.command.id },
       {
@@ -217,9 +200,6 @@ describe("runtime limits", () => {
   });
 
   it("treats cooldownS 0 as no cooldown rather than as unset", async () => {
-    // Zero has to mean zero: the schema allows min 0, and if it silently fell
-    // back to the 15 min site default there would be no way to configure a
-    // fast-cycling plot at all.
     const { id } = await makeGateway();
     await Device.updateOne({ _id: id }, { $set: { "actuators.cooldownS": 0 } });
 
@@ -270,8 +250,6 @@ describe("environmental veto", () => {
   });
 
   it("does NOT veto when there is no soil reading at all", async () => {
-    // A camera-only gateway legitimately has no probe. Absent data must not be
-    // read as "wet", or the feature is unusable on the rig it was built for.
     const { id } = await makeGateway({ plot: "Veto Plot C" });
     const res = await spray(tokenA, id, { durationS: 10 });
     expect(res.status).toBe(202);
@@ -293,7 +271,6 @@ describe("delivery to the gateway", () => {
     expect(delivered.actuator).toBe("sprinkler");
     expect(delivered.action).toBe("on");
     expect(delivered.durationS).toBe(25);
-    // remainingS, not an absolute expiry — the gateway's clock is untrusted.
     expect(delivered.remainingS).toBeGreaterThan(0);
     expect(delivered.expiresAt).toBeUndefined();
 
@@ -315,8 +292,6 @@ describe("delivery to the gateway", () => {
   });
 
   it("re-delivers a still-live command that was never acked", async () => {
-    // The ingest response can be lost on the way back to a marginal link;
-    // delivering exactly once would turn that into a spray that never happened.
     const { id, deviceKey } = await makeGateway();
     await spray(tokenA, id, { durationS: 15 });
 
@@ -329,8 +304,6 @@ describe("delivery to the gateway", () => {
     const { id, deviceKey } = await makeGateway();
     const queued = await spray(tokenA, id, { durationS: 15 });
 
-    // The gateway was offline past the TTL — the farmer's intent described
-    // conditions that no longer hold, so this must die rather than fire late.
     await ActuatorCommand.updateOne(
       { _id: queued.body.data.command.id },
       { $set: { expiresAt: new Date(Date.now() - 1000) } }
@@ -366,8 +339,6 @@ describe("acknowledgement", () => {
 
     const stored = await ActuatorCommand.findById(commandId);
     expect(stored.status).toBe("acked");
-    // 28, not the requested 30 — a watchdog cut is normal and the budget must
-    // count the water that actually moved.
     expect(stored.result.actualRuntimeS).toBe(28);
   });
 
@@ -423,8 +394,6 @@ describe("stop", () => {
       { $set: { status: "acked", ackedAt: new Date(), result: { executed: true, actualRuntimeS: 5 } } }
     );
 
-    // Cooldown would refuse a new spray here, but a stop is never refused —
-    // the reasons not to START water are not reasons to refuse to stop it.
     const res = await request(app)
       .post(`/api/telemetry/devices/${id}/spray/stop`)
       .set("Authorization", `Bearer ${tokenA}`)
@@ -504,9 +473,6 @@ describe("history and provenance", () => {
 
 describe("configuration sanity", () => {
   it("keeps the command TTL short enough that a stale command cannot fire", () => {
-    // The whole safety argument rests on a command dying before the world has
-    // moved on. If someone raises this to an hour, the interlocks stop meaning
-    // anything — so the assumption is asserted, not just documented.
     expect(config.actuatorCommandTtlS).toBeLessThanOrEqual(600);
     expect(config.actuatorMaxRuntimeS).toBeLessThanOrEqual(600);
   });

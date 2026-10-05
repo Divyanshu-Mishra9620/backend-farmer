@@ -183,8 +183,6 @@ export function initSocket(server) {
     cors: {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        // No wildcard branch here — see the matching comment in
-        // src/loaders/express.js for why "*" + credentials:true is unsafe.
         if (config.allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
@@ -477,10 +475,6 @@ export function initSocket(server) {
               });
             });
 
-            // Push delivery for when a mentioned user isn't in the app to
-            // receive the socket events above. One batched lookup instead
-            // of one query per mention. Fire-and-forget — must not delay
-            // message delivery to the rest of the channel.
             User.find({ _id: { $in: mentions } })
               .select("pushToken")
               .then((mentionedUsers) => {

@@ -45,9 +45,6 @@ If bullets help, keep them to 3-4 short points. Keep the tone clean, practical, 
       ],
       model: "openai/gpt-oss-120b",
       temperature: 0.7,
-      // This is a "thinking" model whose hidden reasoning tokens also count
-      // against max_tokens — budget extra room, and hide the reasoning so it
-      // never leaks into the farmer-facing (and TTS-spoken) response.
       max_tokens: 350,
       reasoning_format: "hidden",
       top_p: 1,

@@ -24,8 +24,6 @@ const serializeCapture = (capture) => ({
   createdAt: capture.createdAt,
 });
 
-// The Device model stores flat lat/long; analyzeImage expects them nested under
-// `coordinates`, so this is the seam between the two shapes.
 function toAnalysisLocation(device) {
   const location = {};
   if (device.location?.district) location.district = device.location.district;
@@ -42,8 +40,6 @@ function toAnalysisLocation(device) {
   return location;
 }
 
-// Never throws. It runs inside a detached promise chain, so anything escaping
-// it becomes an unhandled rejection and takes the process down with it.
 async function markFailed(capture, ownerRoom, err) {
   try {
     capture.status = "failed";
@@ -69,8 +65,6 @@ async function markFailed(capture, ownerRoom, err) {
 }
 
 async function markAnalyzed(capture, ownerRoom, analysis) {
-  // Cloudinary upload happens inside analyzeImage, which then deletes the local
-  // file — the returned document is the only place the durable URL exists.
   capture.imageUrl = analysis.imageUrl;
   capture.analysis = analysis._id;
   capture.status = analysis.status === "failed" ? "failed" : "completed";
@@ -85,10 +79,6 @@ async function markAnalyzed(capture, ownerRoom, analysis) {
     status: capture.status,
     detection: analysis.detection || null,
     confidence: analysis.confidencePercentage ?? null,
-    // The farmer-facing mitigation text (grounded in a knowledge-base
-    // document, or an honest healthy/unavailable message) and the
-    // advisory-only sprinkler recommendation — both used to be computed and
-    // then dropped before reaching this event.
     mitigation: analysis.mitigation ?? null,
     action: analysis.action ?? null,
     imageUrl: analysis.imageUrl,
@@ -120,9 +110,6 @@ export const createCapture = async (device, file, meta = {}) => {
   const ownerRoom = String(device.owner);
 
   if (!analyze) {
-    // Nothing else will move this file: analyzeImage is what normally uploads
-    // and unlinks it, so the store-only path has to do both itself or the
-    // image is stranded on an ephemeral container disk with no reachable URL.
     if (
       config.cloudinaryApiKey &&
       config.cloudinaryApiSecret &&
@@ -143,12 +130,6 @@ export const createCapture = async (device, file, meta = {}) => {
       }
     }
 
-    // Cloudinary owns and unlinks file.path itself on a successful upload, but
-    // nothing else does on the other two paths through this branch —
-    // Cloudinary unconfigured, or configured and failing — so the multer temp
-    // file is removed here whenever imageUrl never ended up pointing at a
-    // durable copy. The alternative is an orphaned file per store-only capture
-    // for the lifetime of the container disk.
     if (!capture.imageUrl && fs.existsSync(file.path)) {
       try {
         fs.unlinkSync(file.path);
@@ -178,25 +159,11 @@ export const createCapture = async (device, file, meta = {}) => {
     captureId: capture._id,
     deviceId: device._id,
     nodeLabel,
-    // Still null: the Cloudinary upload is the first step inside analyzeImage,
-    // so no durable URL exists yet. device_capture_analyzed carries it.
     imageUrl: null,
     status: "processing",
     at: new Date(),
   });
 
-  // Detached on purpose. The disease pipeline runs for tens of seconds and a
-  // battery-powered ESP32 holding a TLS socket open that long is how you get
-  // spurious retries and duplicate uploads, so the request returns as soon as
-  // the image is durably handed off (API_CONTRACT.md §2).
-  //
-  // The .catch() is load-bearing, not tidiness: with no rejection handler on a
-  // detached promise, Node's default --unhandled-rejections=throw terminates
-  // the process, so one unreadable JPEG would take the entire API down.
-  //
-  // analyzeImage owns the file at file.path — it uploads it to Cloudinary and
-  // unlinks it, on both the success and the failure path. Nothing here may
-  // read or delete it after this call.
   analyzeImage({
     filePath: file.path,
     originalName: file.originalname,
@@ -231,8 +198,6 @@ export const listCaptures = async (ownerId, options = {}) => {
   return {
     captures: captures.map((capture) => ({
       ...serializeCapture(capture),
-      // populate() replaced the id with the document, so the linked analysis
-      // is spelled out separately and analysisId stays an id in both shapes.
       analysisId: capture.analysis?._id ?? null,
       analysis: capture.analysis
         ? {

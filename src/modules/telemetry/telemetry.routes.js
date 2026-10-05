@@ -25,10 +25,6 @@ const validate = (req, res, next) => {
 
 const router = Router();
 
-// Measurement fields are checked for range but never for presence, and the
-// per-element contents of a batch are left to the service's coercion: an
-// unfitted sensor legitimately sends null, and rejecting a 50-reading offline
-// flush because one buffered entry has a garbled float would lose the other 49.
 const readingsValidation = {
   readings: {
     in: ["body"],
@@ -121,8 +117,6 @@ const registerDeviceValidation = {
     isLength: { options: { min: 1, max: 100 } },
     trim: true,
   },
-  // 15 rather than 16 so the label survives kn_protocol.h's char nodeLabel[16]
-  // with its NUL terminator intact.
   nodeLabel: {
     in: ["body"],
     notEmpty: true,
@@ -217,9 +211,6 @@ const updateDeviceValidation = {
   },
   "location.district": { in: ["body"], optional: true, isString: true, trim: true },
   "location.state": { in: ["body"], optional: true, isString: true, trim: true },
-  // config and thresholds are patchable here even though the contract's PATCH
-  // row only lists the descriptive fields — the config push that rides on every
-  // ingest response has nothing to carry unless something can change it.
   "config.readingIntervalS": {
     in: ["body"],
     optional: true,
@@ -268,9 +259,6 @@ const updateDeviceValidation = {
     isInt: { options: { min: 0, max: 20000 } },
     toInt: true,
   },
-  // Enabling the sprinkler is a PATCH on the device rather than part of
-  // registration on purpose: it asserts that a relay is physically wired to
-  // this board, which is not something a registration form can know.
   "actuators.sprinklerEnabled": {
     in: ["body"],
     optional: true,
@@ -299,8 +287,6 @@ const updateDeviceValidation = {
 
 const sprayValidation = {
   id: { in: ["params"], isMongoId: true, errorMessage: "Invalid device id" },
-  // Optional: absent means "the maximum this device allows". Clamped rather
-  // than rejected when it exceeds the cap — see command.service.js.
   durationS: {
     in: ["body"],
     optional: true,
@@ -397,11 +383,6 @@ const listCapturesValidation = {
   },
 };
 
-// Device-facing (X-Device-Key). deviceAuth deliberately runs BEFORE the
-// limiter: the limiter keys on req.device, which does not exist until auth has
-// resolved the key, so the conventional limiter-first ordering would key every
-// node in a field onto their shared NAT address. Unauthenticated floods are
-// still covered by the IP-keyed generalLimiter mounted on /api.
 router.post(
   "/readings",
   deviceAuth,
@@ -411,8 +392,6 @@ router.post(
   telemetryController.ingestReadings
 );
 
-// uploadSingle before validateImageContent, always: multer is what puts the
-// file on disk, and validateImageContent sniffs magic bytes off that path.
 router.post(
   "/captures",
   deviceAuth,
@@ -426,9 +405,6 @@ router.post(
 
 router.get("/config", deviceAuth, deviceLimiter, telemetryController.getDeviceConfig);
 
-// The gateway reporting what the relay actually did. Device-authenticated, and
-// the command is matched on {id, device} in the service so one device's key can
-// never close out another device's command.
 router.post(
   "/commands/:id/ack",
   deviceAuth,
@@ -438,7 +414,6 @@ router.post(
   telemetryController.acknowledgeCommand
 );
 
-// User-facing (Bearer JWT).
 router.post(
   "/devices",
   authMiddleware,
@@ -469,9 +444,6 @@ router.delete(
   telemetryController.deleteDevice
 );
 
-// Declared before the bare /readings handler would ever see it — there is no
-// /readings/:id route today, but adding one later without this ordering would
-// swallow "latest" as an id.
 router.get(
   "/readings/latest",
   authMiddleware,
@@ -493,11 +465,6 @@ router.get(
 );
 router.get("/summary", authMiddleware, telemetryController.getSummary);
 
-// --- Actuator control (Bearer JWT) -----------------------------------------
-// Nothing here actuates anything directly: each of these queues a command that
-// the gateway collects on its next report. The farmer pressing "Spray" is the
-// required human step between a pest detection and water leaving a nozzle —
-// the RAG pipeline only ever recommends.
 router.post(
   "/devices/:id/spray",
   authMiddleware,

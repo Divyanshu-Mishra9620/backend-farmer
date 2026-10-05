@@ -15,7 +15,6 @@ import {
 
 const router = Router();
 
-// Validation
 const validateSignup = (req, res, next) => {
   const { name, email, password, state, district, address, dob } = req.body;
 

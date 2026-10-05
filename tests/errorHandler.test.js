@@ -51,8 +51,6 @@ describe("errorHandler", () => {
   });
 
   it("does not leak a third-party error's raw message when isAppError is unset", () => {
-    // Simulates Express body-parser, which sets `.status` on malformed JSON
-    // but whose message is a raw V8 parser string never meant for a client.
     const err = new Error("Unexpected token } in JSON at position 42");
     err.status = 400;
     const res = mockRes();

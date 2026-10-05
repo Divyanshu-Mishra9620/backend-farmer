@@ -1,7 +1,3 @@
-// Idempotent seed: ports the 17 government schemes that used to live as a
-// hardcoded array in krishiapp/src/screens/News/governmentSchemes.ts into
-// Mongo, so the /api/schemes endpoint has real data on a fresh database.
-// Upserts by (sector, titles.en) so re-running after edits doesn't duplicate.
 import mongoose from "mongoose";
 import config from "../src/config/env.js";
 import { ensureWorkingDnsResolver } from "../src/config/dns.js";
@@ -291,9 +287,6 @@ async function seed() {
   let updated = 0;
   for (const scheme of SCHEMES) {
     const filter = { sector: scheme.sector, "titles.en": scheme.titles.en };
-    // Mongoose 8's `rawResult` no longer surfaces the driver's
-    // lastErrorObject.upserted flag, so upsert-vs-update has to be checked
-    // explicitly rather than inferred from findOneAndUpdate's return value.
     const existedBefore = await Scheme.exists(filter);
     await Scheme.findOneAndUpdate(filter, scheme, {
       upsert: true,

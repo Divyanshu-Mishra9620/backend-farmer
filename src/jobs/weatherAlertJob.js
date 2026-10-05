@@ -11,7 +11,7 @@ const logger = createLogger("WeatherAlertJob");
 
 const HEAVY_RAIN_MM = 10;
 const EXTREME_HEAT_C = 42;
-const COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+const COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 const ALERTS = [
   {
@@ -47,8 +47,6 @@ async function ensureLocation(prefs, user) {
     return null;
   }
 
-  // Patch only the fields this job owns rather than replacing the whole
-  // subdocument, so a `village` set by some future feature isn't wiped out.
   prefs.location = prefs.location || {};
   prefs.location.state = user.state;
   prefs.location.district = user.district;
@@ -85,9 +83,6 @@ async function checkUser(user) {
       data: { url: "krishiapp://home" },
     });
 
-    // Only start the cooldown when a send was actually attempted — a
-    // skipped send (missing/malformed token) shouldn't count as "alerted",
-    // or the user silently stops receiving alerts for a full cycle.
     if (!result.skipped) {
       prefs.lastWeatherAlert = prefs.lastWeatherAlert || {};
       prefs.lastWeatherAlert[alert.cooldownField] = new Date();
@@ -137,8 +132,6 @@ export function startWeatherAlertJob() {
     });
     logger.info(`Weather alert job scheduled: ${config.weatherAlertCron}`);
   } catch (err) {
-    // An invalid WEATHER_ALERT_CRON must not take the whole server down —
-    // node-cron validates the pattern synchronously and throws.
     logger.error(
       `Failed to schedule weather alert job (check WEATHER_ALERT_CRON="${config.weatherAlertCron}")`,
       err.message,

@@ -79,7 +79,6 @@ describe("community posts error handling", () => {
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("FORBIDDEN");
 
-    // Clean up directly since the non-owner delete was correctly rejected.
     await Post.findByIdAndDelete(postId);
   });
 });

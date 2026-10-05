@@ -1,8 +1,5 @@
 import mongoose from "mongoose";
 
-// Google-created accounts skip password/state/district/address/dob at
-// creation time — the complete-profile endpoint's Joi schema is what
-// actually enforces those fields get filled in, this is just a backstop.
 function requiredUnlessGoogle() {
   return this.authProvider !== "google";
 }
@@ -42,8 +39,6 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
-    // False only for accounts created via Google sign-in that haven't yet
-    // filled in state/district/address/dob through the complete-profile step.
     profileCompleted: {
       type: Boolean,
       default: true,

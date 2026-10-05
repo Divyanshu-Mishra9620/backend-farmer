@@ -25,12 +25,8 @@ const logger = createLogger("Express");
 export default async function expressLoader() {
   const app = express();
 
-  // Trust the platform's reverse proxy (Render/Railway) so req.protocol
-  // reflects the original https:// scheme instead of falling back to http,
-  // which otherwise produces broken/mixed-content image URLs.
   app.set("trust proxy", 1);
 
-  // Security headers
   app.use(
     helmet({
       crossOriginResourcePolicy: false,
@@ -39,16 +35,11 @@ export default async function expressLoader() {
     }),
   );
 
-  // CORS 
   const allowedOrigins = config.allowedOrigins;
   app.use(
     cors({
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        // No wildcard branch here on purpose: a "*" entry combined with
-        // credentials: true below is a credentialed-CORS bypass waiting for
-        // an ALLOWED_ORIGINS env misconfiguration to trigger it. Add real
-        // origins to ALLOWED_ORIGINS instead.
         if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
@@ -59,10 +50,8 @@ export default async function expressLoader() {
     }),
   );
 
-  // Compression
   app.use(compression());
 
-  // Request logging
   if (process.env.NODE_ENV !== "test") {
     app.use(
       morgan("short", {
@@ -71,16 +60,13 @@ export default async function expressLoader() {
     );
   }
 
-  // Rate limiting general
   app.use("/api", generalLimiter);
 
-  // Body parsing
   app.use(express.static("public"));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
   app.use(cookieParser());
 
-  // Health check
   app.get("/health", (req, res) => {
     const dbState = mongoose.connection.readyState;
     const dbConnected = dbState === 1;
@@ -110,10 +96,8 @@ export default async function expressLoader() {
     });
   });
 
-  // API routes
   app.use("/api", routes);
 
-  // Root
   app.get("/", (req, res) => {
     res.json({
       message: "🌾 Welcome to Farmer Assistant API",
@@ -130,7 +114,6 @@ export default async function expressLoader() {
     });
   });
 
-  // 404 handler
   app.use((req, res) => {
     res.status(404).json({
       success: false,
@@ -138,7 +121,6 @@ export default async function expressLoader() {
     });
   });
 
-  // Centralized error handler
   app.use(errorHandler);
 
   return app;

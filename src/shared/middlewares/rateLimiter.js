@@ -60,20 +60,6 @@ export const authLimiter = rateLimit({
   },
 });
 
-// Field hardware is limited per device, not per IP: an entire plot of nodes
-// shares one hotspot's NAT address, so IP keying would let one chatty gateway
-// throttle every other node on the same uplink.
-//
-// That only works if these are mounted AFTER deviceAuth in the route chain.
-// express-rate-limit computes the key before the handler runs, so with the
-// conventional limiter-first ordering req.device is still undefined and every
-// device silently collapses into the shared IP bucket the keying exists to
-// avoid. See the ordering (and its comment) in telemetry.routes.js.
-//
-// These two use `handler` rather than the `message` object the limiters above
-// use, because API_CONTRACT.md §5 requires device-facing failures to come back
-// in the standard {success,error:{code,message}} envelope — routing through
-// httpError is what produces RATE_LIMIT_EXCEEDED via the central errorHandler.
 export const deviceLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 120,

@@ -9,12 +9,8 @@ import { createSchemeSchema, updateSchemeSchema } from "./scheme.validations.js"
 
 const router = Router();
 
-// Public — scheme info is public-domain government data, same as the portals
-// it links to, so farmers can see it without needing a valid session.
 router.get("/", schemeController.getSchemes);
 
-// Admin-only — lets scheme content be corrected/expanded without an app
-// store release, the whole point of moving this off a hardcoded array.
 router.post(
   "/",
   authMiddleware,

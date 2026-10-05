@@ -30,9 +30,6 @@ export const signup = async (userData) => {
     throw httpError(400, "All fields are required");
   }
   const hashedPwd = await hashPassword(password);
-  // Explicit field allowlist, not `...userData` — signup is currently only
-  // blocked from setting e.g. `role: "admin"` by Joi rejecting unknown keys
-  // by default, which is fragile the moment that schema is ever relaxed.
   const user = new User({
     name,
     email,
@@ -97,9 +94,6 @@ export const googleAuth = async (idToken) => {
 
   let user = await User.findOne({ googleId });
   if (!user) {
-    // Google has already verified this email is owned by whoever is signing
-    // in, so an existing local account with the same email can be linked
-    // safely without a password check.
     user = await User.findOne({ email });
     if (user) {
       user.googleId = googleId;
@@ -170,8 +164,6 @@ const GENERIC_FORGOT_PASSWORD_RESPONSE = {
 
 export const forgotPassword = async (email) => {
   const user = await User.findOne({ email });
-  // Always return the same response whether or not the email is registered,
-  // so this endpoint can't be used to enumerate valid accounts.
   if (!user) return GENERIC_FORGOT_PASSWORD_RESPONSE;
 
   const resetToken = crypto.randomBytes(32).toString("hex");

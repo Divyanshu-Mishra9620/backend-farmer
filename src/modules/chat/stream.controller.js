@@ -48,20 +48,17 @@ export async function streamSuggestion(req, res, _next) {
       });
     }
 
-    // Set SSE headers
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("X-Accel-Buffering", "no");
 
-    // Check cache — if hit, stream from cache immediately
     const cacheKey = LRUCache.generateKey("stream", query, context);
     const cached = aiCache.get(cacheKey);
     if (cached) {
       logger.info(`Stream cache hit for user ${req.user?.id || "anonymous"}`);
       res.write(`data: ${JSON.stringify({ status: "connecting" })}\n\n`);
 
-      // Stream cached content word by word for smooth UX
       const words = cached.split(" ");
       for (let i = 0; i < words.length; i++) {
         const content = (i > 0 ? " " : "") + words[i];
@@ -92,7 +89,6 @@ export async function streamSuggestion(req, res, _next) {
 
     let response;
     try {
-      // Use Groq API for streaming suggestions (same as disease detection)
       logger.info("Attempting Groq API call for streaming suggestion...");
       response = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -113,10 +109,6 @@ export async function streamSuggestion(req, res, _next) {
         },
       );
     } catch (fetchErr) {
-      // Only real network-level failures (DNS, TCP, TLS) and the abort timer
-      // land here — an HTTP error response from Groq does not throw from
-      // fetch() and is handled separately below with its actual status, not
-      // mislabeled as a connection failure.
       clearTimeout(timeoutId);
       logger.error("Fetch error", fetchErr.message);
       res.write(
@@ -164,7 +156,6 @@ export async function streamSuggestion(req, res, _next) {
         for (const line of lines) {
           if (line.trim() === "") continue;
 
-          // Handle Groq SSE format (same as OpenRouter)
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
@@ -177,14 +168,11 @@ export async function streamSuggestion(req, res, _next) {
                 res.write(`data: ${JSON.stringify({ content })}\n\n`);
                 if (res.flush) res.flush();
               }
-            } catch {
-              // Skip malformed chunks
-            }
+            } catch {}
           }
         }
       }
 
-      // Cache the full response for future identical queries
       if (fullResponse.length > 0) {
         aiCache.set(cacheKey, fullResponse);
       }
@@ -229,7 +217,6 @@ export async function getSuggestion(req, res, next) {
       throw httpError(400, "Query is required and must be a string");
     }
 
-    // Check cache
     const cacheKey = LRUCache.generateKey("direct", query, context);
     const cached = aiCache.get(cacheKey);
     if (cached) {
@@ -250,7 +237,6 @@ export async function getSuggestion(req, res, next) {
 
     const enhancedPrompt = buildFarmingPrompt(query, context);
 
-    // Use Groq API (same as disease detection)
     logger.info("Calling Groq API for direct suggestion...");
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -276,7 +262,6 @@ export async function getSuggestion(req, res, next) {
     const data = await response.json();
     const text = data.choices[0]?.message?.content || "No response generated";
 
-    // Cache it
     aiCache.set(cacheKey, text);
 
     logger.info("Direct suggestion generated successfully");

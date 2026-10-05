@@ -80,8 +80,6 @@ describe("voice chat error handling", () => {
       .set("Authorization", `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
-    // The "starts a voice session" test above already created one session
-    // for this same user, so history is non-empty by this point.
     expect(res.body.data.voiceChats.length).toBeGreaterThanOrEqual(1);
   });
 });

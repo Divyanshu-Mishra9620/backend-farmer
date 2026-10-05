@@ -10,8 +10,6 @@ const locationSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// Pushed back to the gateway on every ingest response so a config change made
-// in the dashboard reaches the field without the firmware polling for it.
 const deviceConfigSchema = new mongoose.Schema(
   {
     readingIntervalS: { type: Number, default: 300, min: 10 },
@@ -32,14 +30,6 @@ const thresholdsSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// Per-device actuator wiring and limits. `enabled` defaults to FALSE: a device
-// only accepts spray commands once someone has explicitly said a relay is
-// physically wired to it. Registering a gateway must never make it capable of
-// opening a valve by default.
-//
-// The three limits shadow the config.actuator* env defaults so one plot with a
-// small drip line can be capped tighter than the site-wide default without
-// changing the deployment. Null means "use the env default".
 const actuatorConfigSchema = new mongoose.Schema(
   {
     sprinklerEnabled: { type: Boolean, default: false },
@@ -50,10 +40,6 @@ const actuatorConfigSchema = new mongoose.Schema(
   { _id: false }
 );
 
-// When a push notification last went out for each reading-derived alert kind
-// on this device — the cooldown telemetry.service.js checks before sending
-// another, so a persistently dry soil reading doesn't push every ~5min
-// ingest cycle for as long as it stays below threshold.
 const alertPushSchema = new mongoose.Schema(
   {
     soil_dry: Date,
@@ -75,9 +61,6 @@ const deviceSchema = new mongoose.Schema(
       index: true,
     },
     name: { type: String, required: true, trim: true },
-    // 15, not 16: the radio side carries this in `char nodeLabel[16]` and
-    // kn_set_label() always reserves the last byte for the NUL terminator, so
-    // a 16-character label would arrive silently truncated.
     nodeLabel: {
       type: String,
       required: true,
@@ -91,10 +74,6 @@ const deviceSchema = new mongoose.Schema(
       default: "sensor",
     },
     keyHash: { type: String, required: true, select: false },
-    // The first 12 characters of the plaintext key, kept in the clear. The key
-    // itself is unrecoverable after issue, so without this a user staring at
-    // four identical "Plot A" rows has no way to tell which physical board is
-    // which when one needs replacing.
     keyPrefix: { type: String },
     plot: { type: String, trim: true },
     crop: { type: String, trim: true },
@@ -112,16 +91,9 @@ const deviceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// nodeLabel is what the firmware puts on the air and what a user types when
-// relabelling, so it only has to be unique within one account — two farmers
-// may both sensibly call a node "plot-a-soil".
 deviceSchema.index({ owner: 1, nodeLabel: 1 }, { unique: true });
 deviceSchema.index({ keyHash: 1 });
 
-// The staleness window lives in env, not here, so the caller passes it in
-// rather than the model reaching into config — this only exists to keep the
-// same arithmetic from being written out in listDevices, latestPerDevice and
-// summary.
 deviceSchema.methods.isOnlineWithin = function (offlineAfterS) {
   if (!this.lastSeenAt) return false;
   return Date.now() - this.lastSeenAt.getTime() < offlineAfterS * 1000;

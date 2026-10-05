@@ -1,8 +1,3 @@
-/**
- * Lightweight in-memory sliding-window rate limiter for Socket.IO events.
- * Mirrors the express-rate-limit tiers used for the REST API (general vs AI),
- * since socket events bypass express middleware entirely.
- */
 export function createSocketRateLimiter({ windowMs, max }) {
   const hits = new Map();
 
@@ -34,13 +29,11 @@ export function createSocketRateLimiter({ windowMs, max }) {
   };
 }
 
-// AI-cost events: chat_message, analyze_soil - same spirit as REST aiLimiter
 export const checkAiSocketLimit = createSocketRateLimiter({
   windowMs: 60 * 1000,
   max: 8,
 });
 
-// General socket actions: community messages, reactions, channel membership
 export const checkGeneralSocketLimit = createSocketRateLimiter({
   windowMs: 60 * 1000,
   max: 40,

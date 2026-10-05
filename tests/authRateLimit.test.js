@@ -2,12 +2,6 @@ import request from "supertest";
 import expressLoader from "../src/loaders/express.js";
 import { connectTestDB, disconnectTestDB } from "./setup/testDb.js";
 
-// authLimiter caps unauthenticated login attempts at 10 per 15 minutes per
-// IP (src/shared/middlewares/rateLimiter.js). This file is isolated from
-// every other test file specifically so its request count against
-// /api/auth/login isn't shared with (and thrown off by) other suites —
-// Jest gives each test file its own module registry, so this limiter
-// instance's in-memory counter starts fresh at 10 here.
 describe("login rate limiting", () => {
   let app;
 

@@ -236,7 +236,6 @@ Provide practical, actionable advice for Indian farming conditions. Keep the res
         crop: crop || null,
       });
     } finally {
-      // Clean up uploaded file
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }

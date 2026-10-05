@@ -6,14 +6,6 @@ const logger = createLogger("Market");
 
 export class MarketServiceError extends Error {}
 
-/**
- * data.gov.in "Current Daily Price of Various Commodities from Various
- * Markets (Mandi)" resource (9ef84268-d588-465a-a308-a864a43d0070). Its
- * `filters[<field>]` params do a tokenized match, not an exact string match —
- * e.g. district="Pauri Garhwal" matches records stored as "Garhwal (Pauri)" —
- * so callers can pass whatever state/district text they already have without
- * normalizing it to the dataset's exact spelling.
- */
 function buildUrl({ state, district, commodity, limit }) {
   const params = new URLSearchParams({
     "api-key": config.marketApiKey,
@@ -41,10 +33,6 @@ function normalizeRecord(r) {
   };
 }
 
-/**
- * Fetches live mandi prices, grouped by commodity. Throws MarketServiceError
- * on any failure — callers must show "unavailable", not a guessed price.
- */
 export async function fetchMandiPrices({ state, district, commodity, limit = 40 } = {}) {
   if (!config.marketApiUrl || !config.marketApiKey) {
     throw new MarketServiceError("Market data API is not configured.");
@@ -83,8 +71,6 @@ export async function fetchMandiPrices({ state, district, commodity, limit = 40 
     const key = rec.commodity.toLowerCase();
     const bucket = byCommodity.get(key) || { commodity: rec.commodity, modalPrices: [], latest: rec };
     bucket.modalPrices.push(rec.modalPrice);
-    // arrival_date is DD/MM/YYYY; string comparison isn't chronological, so
-    // just keep the first record seen (the API already orders by relevance).
     byCommodity.set(key, bucket);
   }
 

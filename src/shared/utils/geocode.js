@@ -3,12 +3,6 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger("Geocode");
 
-/**
- * Forward-geocodes a free-text address via OpenCage. Returns null when the
- * address genuinely has no match (caller decides how to respond to that);
- * throws on a network/service failure so callers can apply their own
- * fallback behavior.
- */
 export async function geocodeAddress(address) {
   const cacheKey = LRUCache.generateKey("geo", address);
   const cached = geoCache.get(cacheKey);
@@ -41,7 +35,6 @@ export async function geocodeAddress(address) {
     country: result.components.country,
   };
 
-  // Cache geocode results (24 hours)
   geoCache.set(cacheKey, geoData);
 
   return geoData;

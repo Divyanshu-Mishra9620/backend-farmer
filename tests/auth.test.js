@@ -83,8 +83,6 @@ describe("POST /api/auth/login", () => {
       .send({ email: "nobody-such-user@example.com", password: "whatever123" });
 
     expect(res.status).toBe(401);
-    // Same message as wrong-password, not a distinct "user not found" —
-    // an attacker must not be able to tell which case occurred.
     const wrongPassRes = await request(app)
       .post("/api/auth/login")
       .send({ email: payload.email, password: "WrongPassword123!" });

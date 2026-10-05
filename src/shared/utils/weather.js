@@ -3,12 +3,6 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger("Weather");
 
-/**
- * Fetches current conditions from OpenWeatherMap for a coordinate pair.
- * Falls back to a fixed "demo" reading when no API key is configured (dev
- * convenience, matches the pre-extraction controller behavior). Throws on a
- * genuine service failure so callers can apply their own fallback.
- */
 export async function fetchCurrentWeather(lat, lon) {
   const cacheKey = LRUCache.generateKey("weather", lat, lon);
   const cached = weatherCache.get(cacheKey);
@@ -41,7 +35,6 @@ export async function fetchCurrentWeather(lat, lon) {
     rain: weatherData.rain?.["1h"] || 0,
   };
 
-  // Cache weather (10 minutes)
   weatherCache.set(cacheKey, result);
 
   return result;

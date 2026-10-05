@@ -62,8 +62,6 @@ export const analyzeImage = async ({
       }
     }
 
-    // The local file has to survive until here — diagnoseDisease needs the
-    // actual bytes (multipart upload to the RAG service), not a URL.
     analysis.status = "processing";
     await analysis.save();
 

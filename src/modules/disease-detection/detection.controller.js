@@ -81,9 +81,6 @@ export const uploadAndAnalyze = async (req, res, next) => {
       return next(error);
     }
 
-    // analyzeImage() rethrows whatever the AI pipeline/provider threw;
-    // translate known failure reasons to the right status instead of a
-    // blanket 500 so the client can tell "try again" apart from "wait".
     if (error.message?.includes("API key")) {
       return next(
         httpError(503, "The AI service is temporarily unavailable. Please try again shortly."),

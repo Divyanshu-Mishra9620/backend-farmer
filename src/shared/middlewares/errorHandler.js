@@ -16,10 +16,6 @@ const ERROR_TYPES = {
   INTERNAL: { status: 500, code: "INTERNAL_ERROR" },
 };
 
-// Statuses set by our own httpError() (marked with err.isAppError) map
-// directly to a type instead of falling through the keyword-matching below,
-// which doesn't know about e.g. 409 and would otherwise mislabel a correct
-// 409 response as "INTERNAL_ERROR" in the response body.
 const STATUS_TO_TYPE = {
   400: ERROR_TYPES.VALIDATION,
   401: ERROR_TYPES.UNAUTHORIZED,
@@ -112,7 +108,6 @@ export default function errorHandler(err, req, res, _next) {
   const statusCode = err.status || errorType.status;
   const isProduction = process.env.NODE_ENV === "production";
 
-  // Log with context
   logger.error(
     `${req.method} ${req.originalUrl} → ${statusCode} [${errorType.code}]`,
     {
@@ -122,13 +117,6 @@ export default function errorHandler(err, req, res, _next) {
     },
   );
 
-  // err.isAppError is only ever set by our own httpError() deliberately
-  // throwing a user-facing error ("Invalid email or password", "User already
-  // exists..."). It's a distinct flag rather than checking `err.status`
-  // alone, because plenty of third-party errors also set `.status` without
-  // it being a safe message to show — e.g. Express's body-parser sets
-  // `.status = 400` on malformed JSON, but that message is a raw V8 parser
-  // string, never meant to reach a client.
   const response = {
     success: false,
     error: {
@@ -137,7 +125,6 @@ export default function errorHandler(err, req, res, _next) {
     },
   };
 
-  // Include debug info in development only
   if (!isProduction) {
     response.error.debug = {
       originalMessage: err.message,

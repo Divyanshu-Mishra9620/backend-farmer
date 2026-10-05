@@ -48,7 +48,6 @@ function createLogger(module = "") {
       }
     },
 
-    /** Log request context (method, path, user, duration) */
     request(req, statusCode, durationMs) {
       const userId = req.user?.id || "anonymous";
       const msg = `${req.method} ${req.originalUrl} → ${statusCode} (${durationMs}ms) [user:${userId}]`;
@@ -63,7 +62,6 @@ function createLogger(module = "") {
   };
 }
 
-// Default logger (no module prefix)
 const logger = createLogger();
 
 export { createLogger };

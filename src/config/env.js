@@ -43,9 +43,6 @@ const config = {
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN,
   weatherAlertCron: process.env.WEATHER_ALERT_CRON || "0 */3 * * *",
 
-  // Optional. Baked into every stored device key hash, so introducing or
-  // changing it invalidates all existing keys and every board has to be
-  // re-registered or rotated — see src/modules/telemetry/deviceKey.js.
   deviceKeyPepper: process.env.DEVICE_KEY_PEPPER || "",
   deviceOfflineAfterS: parseInt(
     process.env.DEVICE_OFFLINE_AFTER_S || "900",
@@ -57,43 +54,21 @@ const config = {
   ),
   telemetryMaxBatch: parseInt(process.env.TELEMETRY_MAX_BATCH || "50", 10),
 
-  // How long to wait before re-pushing the same (device, alert kind) — a soil
-  // reading below threshold fires on every ~5min ingest cycle it persists
-  // through, and without this a farmer would get a push every 5 minutes for
-  // as long as the field stays dry. 4h is short enough that a genuinely new
-  // night's frost risk still gets its own notification, long enough that one
-  // persistent condition doesn't spam.
   telemetryAlertPushCooldownS: parseInt(
     process.env.TELEMETRY_ALERT_PUSH_COOLDOWN_S || "14400",
     10,
   ),
-  // How often to sweep for devices that have gone silent. Independent of
-  // deviceOfflineAfterS (the staleness threshold itself) — this is just the
-  // polling cadence, since nothing pushes an event when a device stops
-  // reporting the way a new reading does when one arrives.
   deviceOfflineCheckCron: process.env.DEVICE_OFFLINE_CHECK_CRON || "*/5 * * * *",
 
-  // --- Actuator (sprinkler) command queue ---------------------------------
-  // A queued command that no gateway has collected within this window is
-  // expired rather than delivered. This is the interlock that matters most: a
-  // gateway that drops off WiFi mid-afternoon must NOT come back at dusk and
-  // execute a spray the farmer authorised hours ago for conditions that no
-  // longer exist. Keep it near the reading interval, not far above it.
   actuatorCommandTtlS: parseInt(
     process.env.ACTUATOR_COMMAND_TTL_S || "180",
     10,
   ),
-  // Hard ceiling on a single run, enforced server-side when the command is
-  // queued AND again in firmware by a watchdog that cuts the relay. Two
-  // independent limits because a stuck valve is the failure that floods a plot.
   actuatorMaxRuntimeS: parseInt(
     process.env.ACTUATOR_MAX_RUNTIME_S || "120",
     10,
   ),
-  // Minimum gap between two sprays on one device. Stops a farmer tapping the
-  // button repeatedly (or a flapping detection) from waterlogging the root zone.
   actuatorCooldownS: parseInt(process.env.ACTUATOR_COOLDOWN_S || "900", 10),
-  // Total relay-on seconds allowed per device per rolling 24 h.
   actuatorDailyBudgetS: parseInt(
     process.env.ACTUATOR_DAILY_BUDGET_S || "600",
     10,

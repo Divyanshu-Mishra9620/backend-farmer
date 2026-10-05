@@ -23,9 +23,6 @@ async function signupAndLogin(payload) {
   return res.body.accessToken;
 }
 
-// nodeLabel has a hard 15-character ceiling (kn_protocol.h's char[16] on the
-// radio side), so the generated label packs Date.now() as base36 rather than
-// base10 — base10 plus a prefix and a random suffix overflows the limit.
 function uniqueNodeLabel(prefix = "n") {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`.slice(0, 15);
 }
@@ -79,7 +76,6 @@ describe("device registration", () => {
     expect(found).toBeTruthy();
     expect(found.deviceKey).toBeUndefined();
     expect(found.keyHash).toBeUndefined();
-    // Only the prefix survives registration, for telling boards apart in the UI.
     expect(res.body.data.deviceKey.startsWith(found.keyPrefix)).toBe(true);
   });
 
@@ -107,10 +103,6 @@ describe("device registration", () => {
       nodeLabel: "this-label-is-way-too-long",
     });
     expect(res.status).toBe(400);
-    // express-validator failures are caught by routes.js's local `validate`,
-    // which responds {success,message,errors} directly rather than routing
-    // through httpError()/errorHandler's {success,error:{code}} shape — the
-    // same two-shapes-for-400 split already present in detection.routes.js.
     expect(res.body.success).toBe(false);
     expect(Array.isArray(res.body.errors)).toBe(true);
   });
@@ -218,8 +210,6 @@ describe("reading ingest semantics", () => {
     const ingest = await request(app)
       .post("/api/telemetry/readings")
       .set("X-Device-Key", key)
-      // DHT22 failed to read this cycle: only temperature-adjacent fields are
-      // sent. soilMoisturePct, humidityPct, batteryMv, rssi are all omitted.
       .send({ temperatureC: 33.4 });
     expect(ingest.status).toBe(201);
 
@@ -320,7 +310,6 @@ describe("reading ingest semantics", () => {
       .send({ readings });
 
     expect(res.status).toBe(400);
-    // Same express-validator response shape as the nodeLabel-length test above.
     expect(res.body.success).toBe(false);
     expect(Array.isArray(res.body.errors)).toBe(true);
   });
@@ -442,9 +431,6 @@ describe("captures endpoint (analyze=false path only — no live AI calls)", () 
   });
 });
 
-// A minimal-but-valid JPEG (the smallest real decodeable file: 1x1 white
-// pixel) — validateImageContent sniffs actual magic bytes, so a text stub
-// would 400 before ever reaching the controller under test.
 const FAKE_JPEG_BYTES = [
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
   0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,

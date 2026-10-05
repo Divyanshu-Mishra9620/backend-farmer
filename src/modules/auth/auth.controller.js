@@ -1,18 +1,13 @@
 import * as authService from "./auth.service.js";
 import config from "../../config/env.js";
 
-// Web clients get the refresh token as an httpOnly cookie (never readable by
-// JS, so an XSS payload can't exfiltrate it from localStorage the way the
-// audit flagged). Mobile clients have no cookie jar tied to a browser origin,
-// so login/refresh still also return refreshToken in the JSON body for them
-// — the frontend web app just no longer persists that body field anywhere.
 const REFRESH_COOKIE_NAME = "refreshToken";
 const refreshCookieOptions = () => ({
   httpOnly: true,
   secure: config.nodeEnv === "production",
   sameSite: config.nodeEnv === "production" ? "none" : "lax",
   path: "/api/auth",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // matches the refresh token's own 7d expiry
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 });
 
 export const signup = async (req, res, next) => {

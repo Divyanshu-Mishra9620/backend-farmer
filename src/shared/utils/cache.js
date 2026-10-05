@@ -9,9 +9,6 @@ class LRUCache {
     this.misses = 0;
   }
 
-  /**
-   * Generate a cache key from arbitrary data
-   */
   static generateKey(...parts) {
     const raw = parts
       .map((p) => (typeof p === "object" ? JSON.stringify(p) : String(p)))
@@ -19,9 +16,6 @@ class LRUCache {
     return crypto.createHash("md5").update(raw).digest("hex");
   }
 
-  /**
-   * Get a value from cache. Returns null if expired or missing.
-   */
   get(key) {
     const entry = this.cache.get(key);
 
@@ -30,14 +24,12 @@ class LRUCache {
       return null;
     }
 
-    // Check TTL
     if (Date.now() > entry.expiresAt) {
       this.cache.delete(key);
       this.misses++;
       return null;
     }
 
-    // Move to end (most recently used)
     this.cache.delete(key);
     this.cache.set(key, entry);
     this.hits++;
@@ -45,16 +37,11 @@ class LRUCache {
     return entry.value;
   }
 
-  /**
-   * Set a value in cache with optional TTL override
-   */
   set(key, value, ttl = this.defaultTTL) {
-    // Remove existing entry if present
     if (this.cache.has(key)) {
       this.cache.delete(key);
     }
 
-    // Evict oldest if at capacity
     if (this.cache.size >= this.maxSize) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
@@ -67,9 +54,6 @@ class LRUCache {
     });
   }
 
-  /**
-   * Check if key exists and is not expired
-   */
   has(key) {
     const entry = this.cache.get(key);
     if (!entry) return false;
@@ -80,25 +64,16 @@ class LRUCache {
     return true;
   }
 
-  /**
-   * Remove a specific key
-   */
   delete(key) {
     return this.cache.delete(key);
   }
 
-  /**
-   * Clear all entries
-   */
   clear() {
     this.cache.clear();
     this.hits = 0;
     this.misses = 0;
   }
 
-  /**
-   * Get cache statistics
-   */
   getStats() {
     const total = this.hits + this.misses;
     return {
@@ -110,9 +85,6 @@ class LRUCache {
     };
   }
 
-  /**
-   * Remove all expired entries (housekeeping)
-   */
   purgeExpired() {
     const now = Date.now();
     let purged = 0;
@@ -126,7 +98,6 @@ class LRUCache {
   }
 }
 
-// Pre-configured cache instances for different purposes
 const TTL = {
   AI_RESPONSE: 30 * 60 * 1000,
   WEATHER: 10 * 60 * 1000,
@@ -135,13 +106,11 @@ const TTL = {
   GEOCODE: 24 * 60 * 60 * 1000,
 };
 
-// Singleton caches
 const aiCache = new LRUCache({ maxSize: 200, defaultTTL: TTL.AI_RESPONSE });
 const weatherCache = new LRUCache({ maxSize: 50, defaultTTL: TTL.WEATHER });
 const geoCache = new LRUCache({ maxSize: 100, defaultTTL: TTL.GEOCODE });
 const marketCache = new LRUCache({ maxSize: 100, defaultTTL: TTL.MARKET });
 
-// Periodic cleanup every 10 minutes
 setInterval(
   () => {
     aiCache.purgeExpired();

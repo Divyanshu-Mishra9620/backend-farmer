@@ -30,12 +30,7 @@ const analysisSchema = new mongoose.Schema(
     detection: {
       disease: { type: String },
       diseaseTitle: { type: String },
-      // 0-100, straight from the ML classifier (see rag/app/services/ml_client.py)
-      // — not the 0-1 fraction the old raw-LLM pipeline invented.
       confidence: { type: Number, min: 0, max: 100 },
-      // "grounded" (real KB document + LLM answer) | "healthy" | "unavailable"
-      // (no matching KB document — an honest gap, never papered over with a
-      // guess). No severity level: the grounded pipeline doesn't invent one.
       status: {
         type: String,
         enum: ["grounded", "healthy", "unavailable"],
@@ -47,20 +42,11 @@ const analysisSchema = new mongoose.Schema(
       },
     },
 
-    // The full farmer-facing mitigation text — grounded in the source document
-    // above, or one of the fixed honest healthy/unavailable templates. This is
-    // the field CaptureGallery.jsx renders; it used to be computed and then
-    // discarded before ever reaching this schema.
     mitigation: {
       type: String,
       default: null,
     },
 
-    // Pass-through of the RAG service's ActionAdviceSchema (label, category,
-    // water_spray, sprinkler_recommended, rationale, ...) — advice only, never
-    // a command; see rag/app/services/pest_policy.py. Mixed rather than a
-    // typed sub-schema since this backend only stores and displays it, never
-    // validates or branches on individual fields.
     action: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
