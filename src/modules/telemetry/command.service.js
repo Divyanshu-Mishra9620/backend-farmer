@@ -281,13 +281,23 @@ export const acknowledgeCommand = async (device, commandId, payload = {}) => {
   const wasTerminal = !LIVE_STATUSES.includes(command.status);
 
   const executed = payload.executed !== false;
+
+  // null / "" mean "the device did not measure it". Number(null) is 0, which
+  // would be recorded as a zero-second run and refund that spray's share of the
+  // 24h runtime budget in usedRuntimeS(), so only a real number counts.
+  const reported = payload.actualRuntimeS;
+  const hasRuntime =
+    reported !== null &&
+    reported !== undefined &&
+    reported !== "" &&
+    Number.isFinite(Number(reported)) &&
+    Number(reported) >= 0;
+
   command.status = executed ? "acked" : "failed";
   command.ackedAt = new Date();
   command.result = {
     executed,
-    actualRuntimeS: Number.isFinite(Number(payload.actualRuntimeS))
-      ? Number(payload.actualRuntimeS)
-      : undefined,
+    actualRuntimeS: hasRuntime ? Number(reported) : undefined,
     error: payload.error ? String(payload.error).slice(0, 300) : undefined,
   };
   await command.save();

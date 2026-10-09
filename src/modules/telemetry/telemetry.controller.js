@@ -2,6 +2,7 @@ import * as telemetryService from "./telemetry.service.js";
 import * as deviceService from "./device.service.js";
 import * as captureService from "./capture.service.js";
 import * as commandService from "./command.service.js";
+import * as outbreakService from "./outbreak.service.js";
 import httpError from "../../shared/utils/httpError.js";
 
 export const ingestReadings = async (req, res, next) => {
@@ -50,7 +51,9 @@ export const createCapture = async (req, res, next) => {
       data: {
         captureId: capture.id,
         analysisId: capture.analysisId,
-        deviceId: req.device._id,
+        // The device the frame was filed under: the camera node's own record
+        // when a gateway uploaded it on the node's behalf.
+        deviceId: capture.deviceId,
         status: capture.status,
         imageUrl: capture.imageUrl,
       },
@@ -266,6 +269,26 @@ export const getSummary = async (req, res, next) => {
   try {
     const data = await telemetryService.summary(req.user.id);
     return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listOutbreaks = async (req, res, next) => {
+  try {
+    const alerts = await outbreakService.listOutbreaks(req.user.id, {
+      limit: req.query.limit,
+    });
+    return res.json({ success: true, data: alerts, count: alerts.length });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const dismissOutbreak = async (req, res, next) => {
+  try {
+    const result = await outbreakService.dismissOutbreak(req.user.id, req.params.id);
+    return res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

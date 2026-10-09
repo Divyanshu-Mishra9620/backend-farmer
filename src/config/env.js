@@ -8,6 +8,13 @@ if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
   process.exit(1);
 }
 
+// A malformed or negative value in .env falls back to the default instead of
+// becoming NaN, which would silently switch a feature off.
+const positiveNumber = (raw, fallback) => {
+  const value = parseFloat(raw);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
+};
+
 const config = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || "development",
@@ -73,6 +80,10 @@ const config = {
     process.env.ACTUATOR_DAILY_BUDGET_S || "600",
     10,
   ),
+
+  outbreakRadiusKm: positiveNumber(process.env.OUTBREAK_RADIUS_KM, 5),
+  outbreakMinConfidence: positiveNumber(process.env.OUTBREAK_MIN_CONFIDENCE, 60),
+  outbreakCooldownH: positiveNumber(process.env.OUTBREAK_COOLDOWN_H, 24),
 };
 
 export default config;

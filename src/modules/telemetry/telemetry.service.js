@@ -2,7 +2,12 @@ import mongoose from "mongoose";
 import TelemetryReading from "./telemetry.model.js";
 import Device from "./device.model.js";
 import User from "../user/user.model.js";
-import { isDeviceOnline, serializeDevice } from "./device.service.js";
+import {
+  isDeviceOnline,
+  normalizeNodeLabel,
+  resolveNodeDevices,
+  serializeDevice,
+} from "./device.service.js";
 import { emitToUser } from "../chat/socket.js";
 import { sendPushToUser } from "../../shared/utils/pushSender.js";
 import config from "../../config/env.js";
@@ -191,6 +196,13 @@ export async function pushDeviceAlertIfDue(device, alert) {
   }
 }
 
+const deviceSummaryOf = (device) => ({
+  id: device._id,
+  name: device.name,
+  nodeLabel: device.nodeLabel,
+  type: device.type,
+});
+
 export const ingestReadings = async (device, readings) => {
   const now = new Date();
   const incoming = Array.isArray(readings) ? readings : [];
@@ -198,20 +210,39 @@ export const ingestReadings = async (device, readings) => {
   const batch = incoming.slice(0, config.telemetryMaxBatch);
   let rejected = incoming.length - batch.length;
 
-  const documents = [];
+  const accepted = [];
   for (const raw of batch) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       rejected += 1;
       continue;
     }
+    accepted.push(raw);
+  }
+
+  // The device whose key signed this request is the gateway; the readings in it
+  // belong to whichever leaf node's nodeLabel they carry, when that leaf is
+  // registered. Anything unmatched stays on the authenticated device.
+  const leaves = await resolveNodeDevices(
+    device,
+    accepted.map((raw) => normalizeNodeLabel(raw.nodeLabel))
+  );
+  const devicesById = new Map([[String(device._id), device]]);
+
+  const documents = [];
+  for (const raw of accepted) {
+    const label = normalizeNodeLabel(raw.nodeLabel);
+    const target = (label && leaves.get(label)) || device;
+
+    if (target.isActive === false) {
+      rejected += 1;
+      continue;
+    }
+    devicesById.set(String(target._id), target);
 
     documents.push({
-      device: device._id,
+      device: target._id,
       owner: device.owner,
-      nodeLabel:
-        typeof raw.nodeLabel === "string" && raw.nodeLabel.trim()
-          ? raw.nodeLabel.trim().toLowerCase().slice(0, 15)
-          : device.nodeLabel,
+      nodeLabel: label || device.nodeLabel,
       soilMoisturePct: toNumberOrNull(raw.soilMoisturePct),
       soilRaw: toNumberOrNull(raw.soilRaw),
       temperatureC: toNumberOrNull(raw.temperatureC),
@@ -246,42 +277,61 @@ export const ingestReadings = async (device, readings) => {
     return { accepted: 0, rejected };
   }
 
-  const newest = inserted.reduce((latest, reading) =>
-    reading.recordedAt > latest.recordedAt ? reading : latest
-  );
-
-  const deviceUpdate = { lastSeenAt: now };
-  if (newest.rssi !== null) deviceUpdate.lastRssi = newest.rssi;
-  if (newest.batteryMv !== null) deviceUpdate.lastBatteryMv = newest.batteryMv;
-  await Device.updateOne({ _id: device._id }, { $set: deviceUpdate });
-
   const ownerRoom = String(device.owner);
-  const deviceSummary = {
-    id: device._id,
-    name: device.name,
-    nodeLabel: device.nodeLabel,
-    type: device.type,
-  };
 
+  const insertedByDevice = new Map();
   for (const reading of inserted) {
-    emitToUser(ownerRoom, "telemetry_reading", {
-      deviceId: device._id,
-      device: deviceSummary,
-      reading: serializeReading(reading),
-    });
+    const key = String(reading.device);
+    if (!insertedByDevice.has(key)) insertedByDevice.set(key, []);
+    insertedByDevice.get(key).push(reading);
   }
 
-  emitToUser(ownerRoom, "device_status", {
-    deviceId: device._id,
-    nodeLabel: device.nodeLabel,
-    online: true,
-    lastSeenAt: now,
-    batteryMv: newest.batteryMv,
-  });
+  for (const [key, rows] of insertedByDevice) {
+    const target = devicesById.get(key) || device;
 
-  for (const alert of evaluateAlerts(device, newest)) {
-    emitToUser(ownerRoom, "telemetry_alert", alert);
-    pushDeviceAlertIfDue(device, alert);
+    const newest = rows.reduce((latest, reading) =>
+      reading.recordedAt > latest.recordedAt ? reading : latest
+    );
+
+    const deviceUpdate = { lastSeenAt: now };
+    if (newest.rssi !== null) deviceUpdate.lastRssi = newest.rssi;
+    if (newest.batteryMv !== null) deviceUpdate.lastBatteryMv = newest.batteryMv;
+    await Device.updateOne({ _id: target._id }, { $set: deviceUpdate });
+
+    const deviceSummary = deviceSummaryOf(target);
+    for (const reading of rows) {
+      emitToUser(ownerRoom, "telemetry_reading", {
+        deviceId: target._id,
+        device: deviceSummary,
+        reading: serializeReading(reading),
+      });
+    }
+
+    emitToUser(ownerRoom, "device_status", {
+      deviceId: target._id,
+      nodeLabel: target.nodeLabel,
+      online: true,
+      lastSeenAt: now,
+      batteryMv: newest.batteryMv,
+    });
+
+    for (const alert of evaluateAlerts(target, newest)) {
+      emitToUser(ownerRoom, "telemetry_alert", alert);
+      pushDeviceAlertIfDue(target, alert);
+    }
+  }
+
+  // The gateway reported in even if every reading in the batch belonged to a
+  // leaf, so keep its own card live too. (deviceAuth has already stamped its
+  // lastSeenAt; this only tells the open dashboard.)
+  if (!insertedByDevice.has(String(device._id))) {
+    emitToUser(ownerRoom, "device_status", {
+      deviceId: device._id,
+      nodeLabel: device.nodeLabel,
+      online: true,
+      lastSeenAt: now,
+      batteryMv: device.lastBatteryMv ?? null,
+    });
   }
 
   return { accepted: inserted.length, rejected };

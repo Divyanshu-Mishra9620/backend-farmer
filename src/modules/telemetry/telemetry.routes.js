@@ -6,18 +6,30 @@ import { uploadSingle } from "../../shared/utils/upload.js";
 import { validateImageContent } from "../../shared/middlewares/validateImageContent.js";
 import { authMiddleware } from "../../shared/middlewares/authMiddleware.js";
 import {
+  deviceAuthFailLimiter,
   deviceLimiter,
   deviceUploadLimiter,
 } from "../../shared/middlewares/rateLimiter.js";
 import config from "../../config/env.js";
 
+// 400 body: the contract shape ({success:false, error:{code,message}}) that the
+// firmware and the frontend error handler expect, with the older top-level
+// `message` and `errors[]` kept alongside so existing clients keep working.
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const list = errors.array();
+    const detail = list
+      .map((e) => (e.path ? `${e.path}: ${e.msg}` : String(e.msg)))
+      .join("; ");
     return res.status(400).json({
       success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: detail || "Validation failed",
+      },
       message: "Validation failed",
-      errors: errors.array(),
+      errors: list,
     });
   }
   next();
@@ -310,20 +322,30 @@ const sprayValidation = {
   category: { in: ["body"], optional: true, isString: true, trim: true },
 };
 
+// The firmware sends JSON null for anything it did not measure (an ack for a
+// refused or never-started spray has no runtime), so every optional field here
+// accepts null as well as absence.
 const commandAckValidation = {
   id: { in: ["params"], isMongoId: true, errorMessage: "Invalid command id" },
-  executed: { in: ["body"], optional: true, isBoolean: true, toBoolean: true },
+  executed: {
+    in: ["body"],
+    optional: { options: { nullable: true } },
+    isBoolean: true,
+    toBoolean: true,
+  },
   actualRuntimeS: {
     in: ["body"],
-    optional: true,
+    optional: { options: { nullable: true } },
     isInt: { options: { min: 0, max: 86400 } },
     toInt: true,
   },
+  // No length cap: the service truncates to 300 chars. A device reporting a long
+  // error string should still get its ack recorded, not a permanent 400 that
+  // leaves the command re-delivered.
   error: {
     in: ["body"],
-    optional: true,
+    optional: { options: { nullable: true } },
     isString: true,
-    isLength: { options: { max: 300 } },
     trim: true,
   },
 };
@@ -340,6 +362,19 @@ const listCommandsValidation = {
 
 const commandIdValidation = {
   id: { in: ["params"], isMongoId: true, errorMessage: "Invalid command id" },
+};
+
+const listOutbreaksValidation = {
+  limit: {
+    in: ["query"],
+    optional: true,
+    isInt: { options: { min: 1, max: 50 } },
+    toInt: true,
+  },
+};
+
+const outbreakIdValidation = {
+  id: { in: ["params"], isMongoId: true, errorMessage: "Invalid alert id" },
 };
 
 const deviceIdValidation = {
@@ -385,6 +420,7 @@ const listCapturesValidation = {
 
 router.post(
   "/readings",
+  deviceAuthFailLimiter,
   deviceAuth,
   deviceLimiter,
   checkSchema(readingsValidation),
@@ -394,6 +430,7 @@ router.post(
 
 router.post(
   "/captures",
+  deviceAuthFailLimiter,
   deviceAuth,
   deviceUploadLimiter,
   uploadSingle,
@@ -403,10 +440,17 @@ router.post(
   telemetryController.createCapture
 );
 
-router.get("/config", deviceAuth, deviceLimiter, telemetryController.getDeviceConfig);
+router.get(
+  "/config",
+  deviceAuthFailLimiter,
+  deviceAuth,
+  deviceLimiter,
+  telemetryController.getDeviceConfig
+);
 
 router.post(
   "/commands/:id/ack",
+  deviceAuthFailLimiter,
   deviceAuth,
   deviceLimiter,
   checkSchema(commandAckValidation),
@@ -464,6 +508,21 @@ router.get(
   telemetryController.listCaptures
 );
 router.get("/summary", authMiddleware, telemetryController.getSummary);
+
+router.get(
+  "/outbreaks",
+  authMiddleware,
+  checkSchema(listOutbreaksValidation),
+  validate,
+  telemetryController.listOutbreaks
+);
+router.post(
+  "/outbreaks/:id/dismiss",
+  authMiddleware,
+  checkSchema(outbreakIdValidation),
+  validate,
+  telemetryController.dismissOutbreak
+);
 
 router.post(
   "/devices/:id/spray",

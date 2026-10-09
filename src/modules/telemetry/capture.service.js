@@ -1,7 +1,10 @@
 import fs from "fs";
 import DeviceCapture from "./capture.model.js";
+import Device from "./device.model.js";
+import { normalizeNodeLabel, resolveNodeDevices } from "./device.service.js";
 import { clampToServerTime } from "./telemetry.service.js";
 import { analyzeImage } from "../disease-detection/detection.service.js";
+import { raiseOutbreakAlerts } from "./outbreak.service.js";
 import { uploadToCloudinary } from "../../shared/utils/cloudinary.js";
 import { emitToUser } from "../chat/socket.js";
 import config from "../../config/env.js";
@@ -40,10 +43,23 @@ function toAnalysisLocation(device) {
   return location;
 }
 
+const hasLocation = (device) => Object.keys(toAnalysisLocation(device)).length > 0;
+
+function removeUpload(filePath, what) {
+  try {
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    logger.error(`Failed to clean up local file for ${what}`, { error: err.message });
+  }
+}
+
 async function markFailed(capture, ownerRoom, err) {
   try {
     capture.status = "failed";
     capture.error = err?.message || String(err);
+    // The diagnosis can fail after the picture is safely on Cloudinary; keep it
+    // so the dashboard still shows what the camera saw.
+    if (err?.imageUrl) capture.imageUrl = err.imageUrl;
     await capture.save();
 
     emitToUser(ownerRoom, "device_capture_analyzed", {
@@ -92,13 +108,24 @@ export const createCapture = async (device, file, meta = {}) => {
   }
 
   const analyze = meta.analyze !== false;
-  const nodeLabel =
-    typeof meta.nodeLabel === "string" && meta.nodeLabel.trim()
-      ? meta.nodeLabel.trim().toLowerCase().slice(0, 15)
-      : device.nodeLabel;
+  const label = normalizeNodeLabel(meta.nodeLabel);
+
+  // A gateway uploads on behalf of the camera node behind it, tagging the frame
+  // with that node's label. File the capture under the camera's own device when
+  // it is registered, so it shows on the right tile; otherwise it stays on the
+  // authenticated device as before.
+  const leaves = await resolveNodeDevices(device, [label]);
+  const target = (label && leaves.get(label)) || device;
+
+  if (target.isActive === false) {
+    removeUpload(file.path, "rejected capture");
+    throw httpError(403, "Device is deactivated");
+  }
+
+  const nodeLabel = label || device.nodeLabel;
 
   const capture = await DeviceCapture.create({
-    device: device._id,
+    device: target._id,
     owner: device.owner,
     nodeLabel,
     status: analyze ? "processing" : "pending",
@@ -106,6 +133,19 @@ export const createCapture = async (device, file, meta = {}) => {
     batteryMv: meta.batteryMv ?? null,
     capturedAt: clampToServerTime(meta.capturedAt),
   });
+
+  if (target !== device) {
+    const seen = { lastSeenAt: new Date() };
+    const battery = Number(meta.batteryMv);
+    if (meta.batteryMv != null && meta.batteryMv !== "" && Number.isFinite(battery)) {
+      seen.lastBatteryMv = battery;
+    }
+    try {
+      await Device.updateOne({ _id: target._id }, { $set: seen });
+    } catch (err) {
+      logger.warn(`Could not stamp lastSeenAt on ${target._id}`, { error: err.message });
+    }
+  }
 
   const ownerRoom = String(device.owner);
 
@@ -145,7 +185,7 @@ export const createCapture = async (device, file, meta = {}) => {
 
     emitToUser(ownerRoom, "device_capture_received", {
       captureId: capture._id,
-      deviceId: device._id,
+      deviceId: target._id,
       nodeLabel,
       imageUrl: capture.imageUrl,
       status: capture.status,
@@ -157,7 +197,7 @@ export const createCapture = async (device, file, meta = {}) => {
 
   emitToUser(ownerRoom, "device_capture_received", {
     captureId: capture._id,
-    deviceId: device._id,
+    deviceId: target._id,
     nodeLabel,
     imageUrl: null,
     status: "processing",
@@ -168,11 +208,27 @@ export const createCapture = async (device, file, meta = {}) => {
     filePath: file.path,
     originalName: file.originalname,
     userId: device.owner,
-    crop: meta.crop || device.crop,
-    location: toAnalysisLocation(device),
+    crop: meta.crop || target.crop || device.crop,
+    location: hasLocation(target) ? toAnalysisLocation(target) : toAnalysisLocation(device),
     provider: "groq",
   })
-    .then((analysis) => markAnalyzed(capture, ownerRoom, analysis))
+    .then(async (analysis) => {
+      await markAnalyzed(capture, ownerRoom, analysis);
+      // Fire and forget, and outside the catch below: a problem warning the
+      // neighbours must never mark a good diagnosis as failed.
+      if (capture.status === "completed") {
+        raiseOutbreakAlerts({
+          capture,
+          analysis,
+          sourceDevice: target,
+          gateway: device,
+        }).catch((err) =>
+          logger.error(`Outbreak alerting crashed for capture ${capture._id}`, {
+            error: err.message,
+          })
+        );
+      }
+    })
     .catch((err) => markFailed(capture, ownerRoom, err));
 
   return serializeCapture(capture);

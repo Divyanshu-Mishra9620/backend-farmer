@@ -15,6 +15,11 @@ export const analyzeImage = async ({
   provider = "groq",
 }) => {
   let analysis = null;
+  // uploadToCloudinary() deletes the local file the moment the upload settles
+  // (success or failure), so the diagnosis cannot read `filePath` afterwards.
+  // It works from a private copy made before the upload instead.
+  let diagnosisCopy = null;
+  let uploadedUrl = null;
 
   try {
     const imageUrlFallback = `${config.frontendUrl?.replace(/\/$/, "") || "http://localhost:3000"}/uploads/${path.basename(filePath)}`;
@@ -40,6 +45,9 @@ export const analyzeImage = async ({
       ],
     });
 
+    diagnosisCopy = path.join(path.dirname(filePath), `diag-${path.basename(filePath)}`);
+    fs.copyFileSync(filePath, diagnosisCopy);
+
     if (
       config.cloudinaryApiKey &&
       config.cloudinaryApiSecret &&
@@ -53,6 +61,7 @@ export const analyzeImage = async ({
             { quality: "auto" },
           ],
         });
+        uploadedUrl = analysis.imageUrl;
         await analysis.save();
       } catch (uploadError) {
         console.error(
@@ -65,7 +74,7 @@ export const analyzeImage = async ({
     analysis.status = "processing";
     await analysis.save();
 
-    const result = await diagnoseDisease({ filePath, userId });
+    const result = await diagnoseDisease({ filePath: diagnosisCopy, userId });
 
     analysis.detection = {
       disease: result.prediction.disease,
@@ -105,6 +114,10 @@ export const analyzeImage = async ({
   } catch (error) {
     console.error("Image analysis failed:", error);
 
+    // Lets the caller still show the picture on a failed diagnosis, provided it
+    // made it to Cloudinary.
+    if (uploadedUrl && error && typeof error === "object") error.imageUrl = uploadedUrl;
+
     if (analysis) {
       analysis.status = "failed";
       analysis.error = error.message || String(error);
@@ -126,6 +139,8 @@ export const analyzeImage = async ({
     }
 
     throw error;
+  } finally {
+    if (diagnosisCopy) fs.unlink(diagnosisCopy, () => {});
   }
 };
 

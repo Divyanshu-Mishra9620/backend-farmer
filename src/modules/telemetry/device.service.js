@@ -38,6 +38,41 @@ export const serializeDevice = (device) => ({
   updatedAt: device.updatedAt,
 });
 
+export const normalizeNodeLabel = (raw) =>
+  typeof raw === "string" && raw.trim()
+    ? raw.trim().toLowerCase().slice(0, 15)
+    : null;
+
+// A gateway authenticates with ONE device key but forwards traffic for every
+// leaf node behind it, tagging each reading / frame with the leaf's nodeLabel.
+// This maps those labels onto the owner's registered non-gateway devices, so a
+// reading from "plot-a-soil" lands on the "plot-a-soil" device (its tile, its
+// history, its online status, its thresholds) instead of piling up on the
+// gateway's own record.
+//
+// Only a device of type "gateway" may speak for other devices, and only for
+// devices of the same owner, and never for another gateway. A label that matches
+// nothing simply is not in the returned map; callers then fall back to the
+// authenticated device, which is the behaviour before leaf devices existed.
+export const resolveNodeDevices = async (gateway, labels) => {
+  if (!gateway || gateway.type !== "gateway") return new Map();
+
+  const wanted = [
+    ...new Set(
+      (labels || []).filter((label) => label && label !== gateway.nodeLabel)
+    ),
+  ];
+  if (wanted.length === 0) return new Map();
+
+  const found = await Device.find({
+    owner: gateway.owner,
+    nodeLabel: { $in: wanted },
+    type: { $ne: "gateway" },
+  });
+
+  return new Map(found.map((device) => [device.nodeLabel, device]));
+};
+
 export const serializeDeviceConfig = (device) => ({
   readingIntervalS: device.config?.readingIntervalS,
   captureIntervalS: device.config?.captureIntervalS,
