@@ -5,6 +5,8 @@ import { normalizeNodeLabel, resolveNodeDevices } from "./device.service.js";
 import { clampToServerTime } from "./telemetry.service.js";
 import { analyzeImage } from "../disease-detection/detection.service.js";
 import { raiseOutbreakAlerts } from "./outbreak.service.js";
+import { buildFieldContext } from "./fieldContext.service.js";
+import { parseEdgeField, toRagEdgePrediction } from "./edgePrediction.js";
 import { uploadToCloudinary } from "../../shared/utils/cloudinary.js";
 import { emitToUser } from "../chat/socket.js";
 import config from "../../config/env.js";
@@ -24,6 +26,7 @@ const serializeCapture = (capture) => ({
   batteryMv: capture.batteryMv,
   capturedAt: capture.capturedAt,
   error: capture.error,
+  edge: capture.edge ?? null,
   createdAt: capture.createdAt,
 });
 
@@ -70,6 +73,9 @@ async function markFailed(capture, ownerRoom, err) {
       status: "failed",
       detection: null,
       confidence: null,
+      // With the cloud diagnosis gone, the gateway's own reading of the photo
+      // is the only one the farmer gets.
+      edge: capture.edge ?? null,
       imageUrl: capture.imageUrl,
       at: new Date(),
     });
@@ -97,6 +103,12 @@ async function markAnalyzed(capture, ownerRoom, analysis) {
     confidence: analysis.confidencePercentage ?? null,
     mitigation: analysis.mitigation ?? null,
     action: analysis.action ?? null,
+    fieldContext: analysis.fieldContext ?? null,
+    fieldSignals: analysis.fieldSignals ?? [],
+    // "edge" when the cloud model was down and the RAG service diagnosed from
+    // the gateway's prediction instead.
+    predictedBy: analysis.detection?.predictedBy ?? "cloud",
+    edge: capture.edge ?? null,
     imageUrl: analysis.imageUrl,
     at: new Date(),
   });
@@ -109,6 +121,7 @@ export const createCapture = async (device, file, meta = {}) => {
 
   const analyze = meta.analyze !== false;
   const label = normalizeNodeLabel(meta.nodeLabel);
+  const edge = parseEdgeField(meta.edge);
 
   // A gateway uploads on behalf of the camera node behind it, tagging the frame
   // with that node's label. File the capture under the camera's own device when
@@ -132,6 +145,7 @@ export const createCapture = async (device, file, meta = {}) => {
     trigger: meta.trigger || "timer",
     batteryMv: meta.batteryMv ?? null,
     capturedAt: clampToServerTime(meta.capturedAt),
+    edge,
   });
 
   if (target !== device) {
@@ -189,34 +203,54 @@ export const createCapture = async (device, file, meta = {}) => {
       nodeLabel,
       imageUrl: capture.imageUrl,
       status: capture.status,
+      edge,
       at: new Date(),
     });
 
     return serializeCapture(capture);
   }
 
+  // The on-device result is known already, so the dashboard can show it
+  // while the cloud diagnosis is still running.
   emitToUser(ownerRoom, "device_capture_received", {
     captureId: capture._id,
     deviceId: target._id,
     nodeLabel,
     imageUrl: null,
     status: "processing",
+    edge,
     at: new Date(),
   });
 
-  analyzeImage({
-    filePath: file.path,
-    originalName: file.originalname,
-    userId: device.owner,
-    crop: meta.crop || target.crop || device.crop,
-    location: hasLocation(target) ? toAnalysisLocation(target) : toAnalysisLocation(device),
-    provider: "groq",
+  // What the plot's own sensor measured around the time of the photo, so the
+  // write-up can tell the farmer how today's field conditions bear on what the
+  // camera found. Null when no sensor can be tied to this camera; never throws.
+  buildFieldContext({
+    ownerId: device.owner,
+    camera: target,
+    gateway: device,
+    at: capture.capturedAt || new Date(),
   })
+    .then((fieldContext) =>
+      analyzeImage({
+        filePath: file.path,
+        originalName: file.originalname,
+        userId: device.owner,
+        crop: meta.crop || target.crop || device.crop,
+        location: hasLocation(target) ? toAnalysisLocation(target) : toAnalysisLocation(device),
+        provider: "groq",
+        fieldContext,
+        edgePrediction: toRagEdgePrediction(edge),
+      })
+    )
     .then(async (analysis) => {
       await markAnalyzed(capture, ownerRoom, analysis);
       // Fire and forget, and outside the catch below: a problem warning the
-      // neighbours must never mark a good diagnosis as failed.
-      if (capture.status === "completed") {
+      // neighbours must never mark a good diagnosis as failed. Only a cloud
+      // diagnosis warns the neighbours: the on-device model is the smaller,
+      // less accurate one, good enough to advise this farmer when the cloud is
+      // down but not to raise an alarm across the village.
+      if (capture.status === "completed" && analysis.detection?.predictedBy !== "edge") {
         raiseOutbreakAlerts({
           capture,
           analysis,
@@ -247,7 +281,10 @@ export const listCaptures = async (ownerId, options = {}) => {
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
-      .populate("analysis", "status detection mitigation action recommendations createdAt"),
+      .populate(
+        "analysis",
+        "status detection mitigation action recommendations fieldContext fieldSignals createdAt"
+      ),
     DeviceCapture.countDocuments(query),
   ]);
 
@@ -263,6 +300,8 @@ export const listCaptures = async (ownerId, options = {}) => {
             mitigation: capture.analysis.mitigation,
             action: capture.analysis.action,
             recommendations: capture.analysis.recommendations,
+            fieldContext: capture.analysis.fieldContext ?? null,
+            fieldSignals: capture.analysis.fieldSignals ?? [],
             createdAt: capture.analysis.createdAt,
           }
         : null,

@@ -337,6 +337,102 @@ export const ingestReadings = async (device, readings) => {
   return { accepted: inserted.length, rejected };
 };
 
+// At most this many nodes per heartbeat request; a gateway has a handful.
+export const MAX_HEARTBEATS = 20;
+
+const intInRange = (value, lo, hi) => {
+  const n = toNumberOrNull(value);
+  return n !== null && Number.isInteger(n) && n >= lo && n <= hi ? n : null;
+};
+
+// Presence only: the gateway reports which leaf nodes it has heard (their
+// ESP-NOW HELLO beacons) and, by authenticating, that it is alive itself.
+//
+// Why it exists: a camera uploads once per capture interval (30 min by
+// default) but a device counts as offline after DEVICE_OFFLINE_AFTER_S
+// (15 min by default), so without a heartbeat a working camera reads
+// "Offline" for half of every cycle. Nothing is stored except each device's
+// last-seen fields; a heartbeat is not a reading and creates no history.
+//
+// Same rules as readings: only a gateway may speak for other devices, only for
+// devices of its own owner, never for another gateway (resolveNodeDevices).
+// Unknown labels are reported back, not created.
+export const recordHeartbeats = async (gateway, heartbeats) => {
+  const now = new Date();
+  const list = (Array.isArray(heartbeats) ? heartbeats : []).slice(0, MAX_HEARTBEATS);
+  const labels = list.map((hb) =>
+    hb && typeof hb === "object" ? normalizeNodeLabel(hb.nodeLabel) : null
+  );
+  const leaves = await resolveNodeDevices(gateway, labels);
+  const ownerRoom = String(gateway.owner);
+
+  const updated = [];
+  const unknown = [];
+  let rejected = 0;
+  const done = new Set();
+
+  for (let i = 0; i < list.length; i += 1) {
+    const hb = list[i];
+    const label = labels[i];
+    if (!label) {
+      rejected += 1;
+      continue;
+    }
+    // The gateway's own label: deviceAuth already stamped it.
+    if (label === gateway.nodeLabel || done.has(label)) continue;
+
+    const leaf = leaves.get(label);
+    if (!leaf) {
+      unknown.push(label);
+      continue;
+    }
+    if (leaf.isActive === false) {
+      rejected += 1;
+      continue;
+    }
+    done.add(label);
+
+    const update = { lastSeenAt: now };
+    const batteryMv = intInRange(hb.batteryMv, 1, 20000);
+    const rssi = intInRange(hb.rssi, -120, 0);
+    const firmware =
+      typeof hb.firmware === "string" && hb.firmware.trim()
+        ? hb.firmware.trim().slice(0, 16)
+        : null;
+    if (batteryMv !== null) update.lastBatteryMv = batteryMv;
+    if (rssi !== null) update.lastRssi = rssi;
+    if (firmware) update.firmwareVersion = firmware;
+
+    try {
+      await Device.updateOne({ _id: leaf._id }, { $set: update });
+    } catch (err) {
+      logger.warn(`Heartbeat update failed for device ${leaf._id}`, { error: err.message });
+      rejected += 1;
+      continue;
+    }
+
+    emitToUser(ownerRoom, "device_status", {
+      deviceId: leaf._id,
+      nodeLabel: leaf.nodeLabel,
+      online: true,
+      lastSeenAt: now,
+      batteryMv: batteryMv ?? leaf.lastBatteryMv ?? null,
+    });
+    updated.push(leaf.nodeLabel);
+  }
+
+  // The gateway checked in too; keep its own card live on an open dashboard.
+  emitToUser(ownerRoom, "device_status", {
+    deviceId: gateway._id,
+    nodeLabel: gateway.nodeLabel,
+    online: true,
+    lastSeenAt: now,
+    batteryMv: gateway.lastBatteryMv ?? null,
+  });
+
+  return { accepted: updated.length, updated, unknown, rejected };
+};
+
 export const listReadings = async (ownerId, options = {}) => {
   const { deviceId, since, until } = options;
 

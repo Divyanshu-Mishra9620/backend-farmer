@@ -31,6 +31,35 @@ export const ingestReadings = async (req, res, next) => {
   }
 };
 
+// Presence for the leaf nodes behind a gateway (and the gateway itself). The
+// response carries config and queued commands like every device response, so a
+// gateway that only heartbeats still receives a spray command in time.
+export const recordHeartbeat = async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const heartbeats = Array.isArray(body.heartbeats) ? body.heartbeats : [];
+
+    const result = await telemetryService.recordHeartbeats(req.device, heartbeats);
+    const commands = await commandService.claimCommandsForDevice(req.device);
+
+    return res.json({
+      success: true,
+      data: {
+        accepted: result.accepted,
+        updated: result.updated,
+        unknown: result.unknown,
+        rejected: result.rejected,
+        deviceId: req.device._id,
+        serverTime: new Date().toISOString(),
+        config: deviceService.serializeDeviceConfig(req.device),
+        commands,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const createCapture = async (req, res, next) => {
   try {
     if (!req.file) {
@@ -44,6 +73,9 @@ export const createCapture = async (req, res, next) => {
       batteryMv: req.body.batteryMv,
       capturedAt: req.body.capturedAt,
       analyze: req.body.analyze !== "false" && req.body.analyze !== false,
+      // The gateway's on-device prediction (a JSON string). Parsed leniently in
+      // the service: a bad value is dropped, the photo is still accepted.
+      edge: req.body.edge,
     });
 
     return res.status(202).json({

@@ -1,5 +1,25 @@
 import mongoose from "mongoose";
 
+// What the gateway's on-device model said about this photo (see
+// edgePrediction.js). Null for photos from gateways without the model.
+const edgePredictionSchema = new mongoose.Schema(
+  {
+    label: { type: String, trim: true },
+    confidence: { type: Number, min: 0, max: 100 },
+    top: [
+      {
+        _id: false,
+        label: { type: String, trim: true },
+        confidence: { type: Number, min: 0, max: 100 },
+      },
+    ],
+    model: { type: String, trim: true },
+    inferenceMs: { type: Number, default: null },
+    decodeMs: { type: Number, default: null },
+  },
+  { _id: false }
+);
+
 const deviceCaptureSchema = new mongoose.Schema(
   {
     device: {
@@ -32,6 +52,7 @@ const deviceCaptureSchema = new mongoose.Schema(
     batteryMv: { type: Number, default: null },
     capturedAt: { type: Date },
     error: { type: String, default: null },
+    edge: { type: edgePredictionSchema, default: null },
   },
   { timestamps: true }
 );

@@ -1,10 +1,44 @@
 import fs from "fs";
 import path from "path";
 import Analysis from "./analysis.mode.js";
+import User from "../user/user.model.js";
 import { diagnoseDisease, RagDiagnosisError } from "./rag-diagnosis.client.js";
 import { uploadToCloudinary } from "../../shared/utils/cloudinary.js";
 import config from "../../config/env.js";
 import httpError from "../../shared/utils/httpError.js";
+
+// The RAG service writes mitigation in English or Hindi; anything else (or a
+// failed lookup) gets English rather than failing the diagnosis.
+export const diagnosisLanguageFor = async (userId) => {
+  if (!userId) return "en";
+  try {
+    const user = await User.findById(userId).select("language").lean();
+    return user?.language === "hi" ? "hi" : "en";
+  } catch {
+    return "en";
+  }
+};
+
+function applyDiagnosis(analysis, result) {
+  analysis.detection = {
+    disease: result.prediction.disease,
+    diseaseTitle: result.prediction.disease_title,
+    confidence: result.prediction.confidence,
+    status: result.status,
+    source: result.source
+      ? {
+          title: result.source.title,
+          sourceFile: result.source.source_file,
+          scientificName: result.source.scientific_name,
+        }
+      : undefined,
+    predictedBy: result.prediction.predicted_by === "edge" ? "edge" : "cloud",
+    edgeModel: result.prediction.predicted_by === "edge" ? result.prediction.edge_model || undefined : undefined,
+  };
+  analysis.mitigation = result.mitigation || result.message || null;
+  analysis.action = result.action || null;
+  analysis.fieldSignals = Array.isArray(result.field_signals) ? result.field_signals : [];
+}
 
 export const analyzeImage = async ({
   filePath,
@@ -13,6 +47,9 @@ export const analyzeImage = async ({
   crop,
   location = {},
   provider = "groq",
+  fieldContext = null,
+  edgePrediction = null,
+  language,
 }) => {
   let analysis = null;
   // uploadToCloudinary() deletes the local file the moment the upload settles
@@ -35,6 +72,8 @@ export const analyzeImage = async ({
         coordinates: location.coordinates,
       },
       aiProvider: provider,
+      fieldContext,
+      edgePrediction,
       status: "pending",
       processingSteps: [
         {
@@ -74,23 +113,15 @@ export const analyzeImage = async ({
     analysis.status = "processing";
     await analysis.save();
 
-    const result = await diagnoseDisease({ filePath: diagnosisCopy, userId });
+    const result = await diagnoseDisease({
+      filePath: diagnosisCopy,
+      userId,
+      language: language || (await diagnosisLanguageFor(userId)),
+      fieldContext,
+      edgePrediction,
+    });
 
-    analysis.detection = {
-      disease: result.prediction.disease,
-      diseaseTitle: result.prediction.disease_title,
-      confidence: result.prediction.confidence,
-      status: result.status,
-      source: result.source
-        ? {
-            title: result.source.title,
-            sourceFile: result.source.source_file,
-            scientificName: result.source.scientific_name,
-          }
-        : undefined,
-    };
-    analysis.mitigation = result.mitigation || result.message || null;
-    analysis.action = result.action || null;
+    applyDiagnosis(analysis, result);
     analysis.status = "completed";
     analysis.processingSteps.push({
       step: "diagnosis",
@@ -98,6 +129,7 @@ export const analyzeImage = async ({
       result: {
         status: result.status,
         inferenceTimeMs: result.prediction.inference_time_ms,
+        predictedBy: analysis.detection.predictedBy,
       },
     });
     await analysis.save();
@@ -237,23 +269,12 @@ export const retryFailedAnalysis = async (analysisId, userId = null) => {
     const result = await diagnoseDisease({
       imageUrl: analysis.imageUrl,
       userId: analysis.user,
+      language: await diagnosisLanguageFor(analysis.user),
+      fieldContext: analysis.fieldContext || null,
+      edgePrediction: analysis.edgePrediction || null,
     });
 
-    analysis.detection = {
-      disease: result.prediction.disease,
-      diseaseTitle: result.prediction.disease_title,
-      confidence: result.prediction.confidence,
-      status: result.status,
-      source: result.source
-        ? {
-            title: result.source.title,
-            sourceFile: result.source.source_file,
-            scientificName: result.source.scientific_name,
-          }
-        : undefined,
-    };
-    analysis.mitigation = result.mitigation || result.message || null;
-    analysis.action = result.action || null;
+    applyDiagnosis(analysis, result);
     analysis.status = "completed";
     analysis.error = null;
     analysis.processingSteps.push({

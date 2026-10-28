@@ -7,12 +7,12 @@ import { sendPushToUser } from "../../shared/utils/pushSender.js";
 import config from "../../config/env.js";
 import httpError from "../../shared/utils/httpError.js";
 import { createLogger } from "../../shared/utils/logger.js";
+import { coordsOf, distanceKm } from "../../shared/utils/geo.js";
 
 const logger = createLogger("Outbreak");
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-const EARTH_RADIUS_KM = 6371;
 const KM_PER_DEG_LAT = 111.32;
 // Upper bounds on one fan-out, so a single detection in a dense district can
 // never turn into an unbounded query or push storm.
@@ -36,29 +36,9 @@ const round1 = (value) =>
     ? Math.round(value * 10) / 10
     : null;
 
-// {lat, lon} from a device / analysis style location, or null when it has no
-// usable GPS. (0, 0) is treated as missing: it is what a blank form or a
-// failed fix produces, and no farm is at that point in the Atlantic.
-export const coordsOf = (location) => {
-  const lat = Number(location?.latitude);
-  const lon = Number(location?.longitude);
-  if (location?.latitude == null || location?.longitude == null) return null;
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-  if (lat === 0 && lon === 0) return null;
-  return { lat, lon };
-};
-
-// Great-circle distance in km (haversine).
-export const distanceKm = (a, b) => {
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
-};
+// Shared with the field-context lookup (fieldContext.service.js); re-exported
+// here so existing imports of outbreak.service keep working.
+export { coordsOf, distanceKm };
 
 // Is `candidate` near `source`? GPS on both sides decides by distance and
 // nothing else: two farms 30 km apart are not neighbours just because they

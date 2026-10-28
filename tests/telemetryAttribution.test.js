@@ -63,6 +63,7 @@ jest.unstable_mockModule("../src/shared/utils/cloudinary.js", () => ({
 const echo = (req, res) => res.status(200).json({ success: true, body: req.body });
 jest.unstable_mockModule("../src/modules/telemetry/telemetry.controller.js", () => ({
   ingestReadings: echo,
+  recordHeartbeat: echo,
   createCapture: echo,
   getDeviceConfig: echo,
   acknowledgeCommand: echo,
@@ -80,6 +81,8 @@ jest.unstable_mockModule("../src/modules/telemetry/telemetry.controller.js", () 
   getActuatorStatus: echo,
   listCommands: echo,
   cancelCommand: echo,
+  listOutbreaks: echo,
+  dismissOutbreak: echo,
 }));
 const passThrough = (req, res, next) => next();
 jest.unstable_mockModule("../src/shared/utils/upload.js", () => ({
@@ -92,7 +95,9 @@ jest.unstable_mockModule("../src/shared/middlewares/authMiddleware.js", () => ({
   authMiddleware: (req, res, next) => next(),
 }));
 
-const { ingestReadings } = await import("../src/modules/telemetry/telemetry.service.js");
+const { ingestReadings, recordHeartbeats } = await import(
+  "../src/modules/telemetry/telemetry.service.js"
+);
 const { createCapture } = await import("../src/modules/telemetry/capture.service.js");
 const { acknowledgeCommand } = await import("../src/modules/telemetry/command.service.js");
 const { normalizeNodeLabel, resolveNodeDevices } = await import(
@@ -306,6 +311,78 @@ describe("ingestReadings attribution", () => {
 // Captures
 // ---------------------------------------------------------------------------
 
+describe("recordHeartbeats", () => {
+  const camLeaf = (o = {}) =>
+    makeDevice({ _id: "leaf-cam", nodeLabel: "plot-a-cam", type: "camera", ...o });
+
+  it("stamps last-seen on each leaf the gateway heard and tells the dashboard", async () => {
+    deviceModel.find.mockResolvedValue([camLeaf(), soilLeaf()]);
+    const result = await recordHeartbeats(gateway(), [
+      { nodeLabel: "plot-a-cam", nodeType: "camera", batteryMv: 3810, rssi: -55, firmware: "1.0.0" },
+      { nodeLabel: "PLOT-A-SOIL", nodeType: "sensor" },
+    ]);
+
+    expect(result).toEqual({ accepted: 2, updated: ["plot-a-cam", "plot-a-soil"], unknown: [], rejected: 0 });
+    const [camCall, soilCall] = deviceModel.updateOne.mock.calls;
+    expect(camCall[0]).toEqual({ _id: "leaf-cam" });
+    expect(camCall[1].$set).toMatchObject({ lastBatteryMv: 3810, lastRssi: -55, firmwareVersion: "1.0.0" });
+    expect(camCall[1].$set.lastSeenAt).toBeInstanceOf(Date);
+    expect(Object.keys(soilCall[1].$set)).toEqual(["lastSeenAt"]);
+
+    const statuses = emitted("device_status");
+    expect(statuses.map((st) => st.deviceId)).toEqual(["leaf-cam", "leaf-soil", "gw"]);
+    expect(statuses.every((st) => st.online === true)).toBe(true);
+    expect(statuses[0].batteryMv).toBe(3810);
+    // A heartbeat is presence, not a reading: nothing is stored as history.
+    expect(readingModel.insertMany).not.toHaveBeenCalled();
+  });
+
+  it("ignores the 'unknown' battery marker and out-of-range values instead of storing them", async () => {
+    deviceModel.find.mockResolvedValue([camLeaf()]);
+    await recordHeartbeats(gateway(), [
+      { nodeLabel: "plot-a-cam", batteryMv: 65535, rssi: 12, firmware: "   " },
+    ]);
+    expect(Object.keys(deviceModel.updateOne.mock.calls[0][1].$set)).toEqual(["lastSeenAt"]);
+    expect(emitted("device_status")[0].batteryMv).toBeNull();
+  });
+
+  it("reports unknown labels, skips inactive leaves, duplicates and the gateway's own label", async () => {
+    deviceModel.find.mockResolvedValue([camLeaf({ isActive: false }), soilLeaf()]);
+    const result = await recordHeartbeats(gateway(), [
+      { nodeLabel: "plot-a-cam" },
+      { nodeLabel: "plot-b-soil" },
+      { nodeLabel: "plot-a-soil" },
+      { nodeLabel: "plot-a-soil" },
+      { nodeLabel: "gateway-1" },
+      { nodeLabel: "" },
+      "junk",
+    ]);
+    expect(result).toEqual({ accepted: 1, updated: ["plot-a-soil"], unknown: ["plot-b-soil"], rejected: 3 });
+    expect(deviceModel.updateOne).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets only a gateway speak for other devices", async () => {
+    deviceModel.find.mockResolvedValue([camLeaf()]);
+    const result = await recordHeartbeats(soilLeaf(), [{ nodeLabel: "plot-a-cam" }]);
+    expect(result.accepted).toBe(0);
+    expect(result.unknown).toEqual(["plot-a-cam"]);
+    expect(deviceModel.updateOne).not.toHaveBeenCalled();
+  });
+
+  it("still marks the gateway itself live on an empty heartbeat", async () => {
+    const result = await recordHeartbeats(gateway(), []);
+    expect(result.accepted).toBe(0);
+    expect(emitted("device_status").map((st) => st.deviceId)).toEqual(["gw"]);
+  });
+
+  it("does not fail the whole heartbeat when one update fails", async () => {
+    deviceModel.find.mockResolvedValue([camLeaf(), soilLeaf()]);
+    deviceModel.updateOne.mockRejectedValueOnce(new Error("db hiccup"));
+    const result = await recordHeartbeats(gateway(), [{ nodeLabel: "plot-a-cam" }, { nodeLabel: "plot-a-soil" }]);
+    expect(result).toMatchObject({ accepted: 1, updated: ["plot-a-soil"], rejected: 1 });
+  });
+});
+
 describe("createCapture attribution", () => {
   const tmpFile = () => {
     const file = path.join(os.tmpdir(), `kn-capture-${Date.now()}-${Math.random()}.jpg`);
@@ -327,6 +404,8 @@ describe("createCapture attribution", () => {
     expect(captureModel.create.mock.calls[0][0].device).toBe("leaf-cam");
     expect(out.deviceId).toBe("leaf-cam");
     expect(emitted("device_capture_received")[0].deviceId).toBe("leaf-cam");
+    // The diagnosis starts once the field-context lookup has settled.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(analyzeImage.mock.calls[0][0].crop).toBe("tomato");
     expect(deviceModel.updateOne).toHaveBeenCalledWith(
       { _id: "leaf-cam" },
@@ -486,6 +565,32 @@ describe("device routes", () => {
     expect(badId.status).toBe(400);
   });
 
+  it("accepts a heartbeat batch and validates it in the contract shape", async () => {
+    const ok = await post("/api/telemetry/heartbeat").send({
+      heartbeats: [{ nodeLabel: "plot-a-cam", batteryMv: null, rssi: -60 }],
+    });
+    expect(ok.status).toBe(200);
+
+    const empty = await post("/api/telemetry/heartbeat").send({});
+    expect(empty.status).toBe(200);
+
+    const tooMany = await post("/api/telemetry/heartbeat").send({
+      heartbeats: Array.from({ length: 21 }, () => ({ nodeLabel: "x" })),
+    });
+    expect(tooMany.status).toBe(400);
+    expect(tooMany.body.error.code).toBe("VALIDATION_ERROR");
+
+    const longLabel = await post("/api/telemetry/heartbeat").send({
+      heartbeats: [{ nodeLabel: "x".repeat(16) }],
+    });
+    expect(longLabel.status).toBe(400);
+  });
+
+  it("refuses a heartbeat without a valid device key", async () => {
+    const res = await request(app).post("/api/telemetry/heartbeat").send({ heartbeats: [] });
+    expect(res.status).toBe(401);
+  });
+
   describe("isDeviceRequest", () => {
     const req = (method, p, key = "knd_x") => ({
       method,
@@ -493,9 +598,11 @@ describe("device routes", () => {
       headers: key === null ? {} : { "x-device-key": key },
     });
 
-    it("matches the four device routes only, and only with a key header", () => {
+    it("matches the device routes only, and only with a key header", () => {
       expect(isDeviceRequest(req("POST", "/telemetry/readings"))).toBe(true);
       expect(isDeviceRequest(req("POST", "/telemetry/captures"))).toBe(true);
+      expect(isDeviceRequest(req("POST", "/telemetry/heartbeat"))).toBe(true);
+      expect(isDeviceRequest(req("GET", "/telemetry/heartbeat"))).toBe(false);
       expect(isDeviceRequest(req("GET", "/telemetry/config"))).toBe(true);
       expect(isDeviceRequest(req("POST", "/telemetry/commands/abc123/ack"))).toBe(true);
 

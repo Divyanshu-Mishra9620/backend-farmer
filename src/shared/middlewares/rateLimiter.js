@@ -1,15 +1,17 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import httpError from "../utils/httpError.js";
 
-// The four routes a field device calls with its X-Device-Key. They have their
+// The routes a field device calls with its X-Device-Key. They have their
 // own limiters (deviceLimiter / deviceUploadLimiter, keyed by device id, and
 // deviceAuthFailLimiter below), so the shared 100-per-15-min bucket must not
 // also apply: that bucket is keyed by IP, and a farm router puts the gateway
-// (a reading every minute, plus config polls and command acks) and the owner's
-// phone on the same address. The gateway would starve the app, or the reverse.
+// (a reading every minute, plus heartbeats, config polls and command acks) and
+// the owner's phone on the same address. The gateway would starve the app, or
+// the reverse.
 const DEVICE_ROUTES = [
   ["POST", /^\/telemetry\/readings\/?$/],
   ["POST", /^\/telemetry\/captures\/?$/],
+  ["POST", /^\/telemetry\/heartbeat\/?$/],
   ["GET", /^\/telemetry\/config\/?$/],
   ["POST", /^\/telemetry\/commands\/[^/]+\/ack\/?$/],
 ];

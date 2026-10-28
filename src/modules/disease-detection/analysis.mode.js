@@ -40,6 +40,21 @@ const analysisSchema = new mongoose.Schema(
         sourceFile: String,
         scientificName: String,
       },
+      // Which model named the disease: the cloud model, or - when it could not
+      // answer - the field gateway's on-device model (edgeModel says which build).
+      predictedBy: {
+        type: String,
+        enum: ["cloud", "edge"],
+        default: "cloud",
+      },
+      edgeModel: { type: String },
+    },
+
+    // The gateway's on-device prediction sent with a camera photo, kept so a
+    // retry can offer it to the RAG service again.
+    edgePrediction: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
 
     mitigation: {
@@ -50,6 +65,19 @@ const analysisSchema = new mongoose.Schema(
     action: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
+    },
+
+    // What the farmer's field sensor measured around the time of the photo
+    // (camera captures only; see telemetry/fieldContext.service.js), and the
+    // rule-based signals the RAG service derived from it.
+    fieldContext: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+
+    fieldSignals: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
     },
 
     recommendations: {

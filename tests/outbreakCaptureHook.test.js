@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 
 const raiseOutbreakAlerts = jest.fn(async () => ({ created: 0 }));
 const analyzeImage = jest.fn();
+const buildFieldContext = jest.fn(async () => null);
 const emitted = [];
 const saved = [];
 
@@ -15,6 +16,9 @@ jest.unstable_mockModule("../src/modules/telemetry/outbreak.service.js", () => (
 }));
 jest.unstable_mockModule("../src/modules/disease-detection/detection.service.js", () => ({
   analyzeImage,
+}));
+jest.unstable_mockModule("../src/modules/telemetry/fieldContext.service.js", () => ({
+  buildFieldContext,
 }));
 jest.unstable_mockModule("../src/modules/chat/socket.js", () => ({
   emitToUser: (room, event, data) => emitted.push({ room, event, data }),
@@ -65,6 +69,8 @@ beforeEach(() => {
   raiseOutbreakAlerts.mockReset();
   raiseOutbreakAlerts.mockImplementation(async () => ({ created: 0 }));
   analyzeImage.mockReset();
+  buildFieldContext.mockReset();
+  buildFieldContext.mockImplementation(async () => null);
   emitted.length = 0;
   saved.length = 0;
   leaves = new Map([["plot-a-cam", camera]]);
@@ -126,4 +132,35 @@ it("a frame from an unregistered label is attributed to the gateway itself", asy
   await createCapture(gateway, file, { nodeLabel: "unknown-cam" });
   await settle();
   expect(raiseOutbreakAlerts.mock.calls[0][0].sourceDevice).toBe(gateway);
+});
+
+it("sends the plot sensor's field context with the diagnosis and relays the signals", async () => {
+  const fieldContext = { latest: { soilMoisturePct: 18.4 }, ageMinutes: 12 };
+  const fieldSignals = [{ code: "soil_dry", level: "warning", text: "Soil moisture is 18.4%", evidence: {} }];
+  buildFieldContext.mockResolvedValue(fieldContext);
+  analyzeImage.mockResolvedValue({ ...goodAnalysis(), fieldContext, fieldSignals });
+
+  await createCapture(gateway, file, { nodeLabel: "plot-a-cam" });
+  await settle();
+
+  const [ctxArgs] = buildFieldContext.mock.calls[0];
+  expect(ctxArgs.camera).toBe(camera);
+  expect(ctxArgs.gateway).toBe(gateway);
+  expect(String(ctxArgs.ownerId)).toBe(String(owner));
+  expect(analyzeImage.mock.calls[0][0].fieldContext).toBe(fieldContext);
+
+  const analyzed = emitted.find((e) => e.event === "device_capture_analyzed");
+  expect(analyzed.data.fieldSignals).toEqual(fieldSignals);
+  expect(analyzed.data.fieldContext).toBe(fieldContext);
+});
+
+it("diagnoses without field context when no sensor can be tied to the camera", async () => {
+  analyzeImage.mockResolvedValue(goodAnalysis());
+  await createCapture(gateway, file, { nodeLabel: "plot-a-cam" });
+  await settle();
+
+  expect(analyzeImage).toHaveBeenCalledTimes(1);
+  expect(analyzeImage.mock.calls[0][0].fieldContext).toBeNull();
+  const analyzed = emitted.find((e) => e.event === "device_capture_analyzed");
+  expect(analyzed.data.fieldSignals).toEqual([]);
 });

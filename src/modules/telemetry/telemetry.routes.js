@@ -85,6 +85,23 @@ const readingsValidation = {
   },
 };
 
+const heartbeatValidation = {
+  heartbeats: {
+    in: ["body"],
+    optional: true,
+    isArray: {
+      options: { min: 0, max: 20 },
+      errorMessage: "heartbeats must be an array of at most 20 entries",
+    },
+  },
+  "heartbeats.*.nodeLabel": {
+    in: ["body"],
+    isString: true,
+    isLength: { options: { min: 1, max: 15 } },
+    trim: true,
+  },
+};
+
 const captureValidation = {
   nodeLabel: {
     in: ["body"],
@@ -438,6 +455,16 @@ router.post(
   checkSchema(captureValidation),
   validate,
   telemetryController.createCapture
+);
+
+router.post(
+  "/heartbeat",
+  deviceAuthFailLimiter,
+  deviceAuth,
+  deviceLimiter,
+  checkSchema(heartbeatValidation),
+  validate,
+  telemetryController.recordHeartbeat
 );
 
 router.get(

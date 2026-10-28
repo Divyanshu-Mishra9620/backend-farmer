@@ -38,13 +38,35 @@ async function appendImage(form, { filePath, imageUrl }) {
   });
 }
 
-export async function diagnoseDisease({ filePath, imageUrl, userId, language = "en", topK = 3 }) {
+// `fieldContext` (optional) is what the farmer's sensor measured on the field
+// the photo came from (see telemetry/fieldContext.service.js). The RAG service
+// turns it into field signals next to the grounded write-up; it never changes
+// the diagnosis itself.
+//
+// `edgePrediction` (optional) is the field gateway's on-device prediction for a
+// camera photo (see telemetry/edgePrediction.js). The RAG service uses it only
+// when its cloud ML model cannot answer, and reports prediction.predicted_by.
+export async function diagnoseDisease({
+  filePath,
+  imageUrl,
+  userId,
+  language = "en",
+  topK = 3,
+  fieldContext = null,
+  edgePrediction = null,
+}) {
   if (!config.ragApiUrl) {
     throw new RagDiagnosisError("RAG_API_URL is not configured.");
   }
 
   const form = new FormData();
   await appendImage(form, { filePath, imageUrl });
+  if (fieldContext) {
+    form.append("field_context", JSON.stringify(fieldContext));
+  }
+  if (edgePrediction) {
+    form.append("edge_prediction", JSON.stringify(edgePrediction));
+  }
 
   const url = `${config.ragApiUrl.replace(/\/$/, "")}/api/diagnose-disease?top_k=${topK}&language=${encodeURIComponent(language)}`;
   const controller = new AbortController();
