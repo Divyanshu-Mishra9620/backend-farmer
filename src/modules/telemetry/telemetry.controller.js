@@ -297,6 +297,15 @@ export const listCaptures = async (req, res, next) => {
   }
 };
 
+export const deleteCapture = async (req, res, next) => {
+  try {
+    const result = await captureService.deleteCapture(req.user.id, req.params.id);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getSummary = async (req, res, next) => {
   try {
     const data = await telemetryService.summary(req.user.id);

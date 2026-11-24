@@ -1,6 +1,23 @@
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import httpError from "../utils/httpError.js";
 
+const normalizeIp = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/^::ffff:/i, "")
+    .toLowerCase();
+
+const rateLimitAllowlist = new Set(
+  (process.env.RATE_LIMIT_ALLOWLIST_IPS || "")
+    .split(",")
+    .map(normalizeIp)
+    .filter(Boolean)
+);
+
+const isRateLimitAllowlisted = (req) =>
+  rateLimitAllowlist.has(normalizeIp(req.ip)) ||
+  rateLimitAllowlist.has(normalizeIp(req.socket?.remoteAddress));
+
 // The routes a field device calls with its X-Device-Key. They have their
 // own limiters (deviceLimiter / deviceUploadLimiter, keyed by device id, and
 // deviceAuthFailLimiter below), so the shared 100-per-15-min bucket must not
@@ -30,7 +47,7 @@ export const generalLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: isDeviceRequest,
+  skip: (req) => isDeviceRequest(req) || isRateLimitAllowlisted(req),
   message: {
     success: false,
     message:
@@ -78,6 +95,7 @@ export const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isRateLimitAllowlisted,
   message: {
     success: false,
     message: "Too many login attempts. Please try again after 15 minutes.",

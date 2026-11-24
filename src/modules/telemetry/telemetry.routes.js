@@ -435,6 +435,10 @@ const listCapturesValidation = {
   },
 };
 
+const captureIdValidation = {
+  id: { in: ["params"], isMongoId: true, errorMessage: "Invalid capture id" },
+};
+
 router.post(
   "/readings",
   deviceAuthFailLimiter,
@@ -533,6 +537,13 @@ router.get(
   checkSchema(listCapturesValidation),
   validate,
   telemetryController.listCaptures
+);
+router.delete(
+  "/captures/:id",
+  authMiddleware,
+  checkSchema(captureIdValidation),
+  validate,
+  telemetryController.deleteCapture
 );
 router.get("/summary", authMiddleware, telemetryController.getSummary);
 

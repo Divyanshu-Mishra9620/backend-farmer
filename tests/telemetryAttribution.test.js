@@ -75,6 +75,7 @@ jest.unstable_mockModule("../src/modules/telemetry/telemetry.controller.js", () 
   listLatestReadings: echo,
   listReadings: echo,
   listCaptures: echo,
+  deleteCapture: echo,
   getSummary: echo,
   sprayNow: echo,
   stopSpray: echo,

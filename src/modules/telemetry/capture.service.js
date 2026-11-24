@@ -312,3 +312,9 @@ export const listCaptures = async (ownerId, options = {}) => {
     hasMore: offset + limit < total,
   };
 };
+
+export const deleteCapture = async (ownerId, captureId) => {
+  const capture = await DeviceCapture.findOneAndDelete({ _id: captureId, owner: ownerId });
+  if (!capture) throw httpError(404, "Capture not found");
+  return { id: capture._id };
+};
